@@ -12,12 +12,6 @@ if __name__ == "__main__":
     parser.add_argument("--output_folder", type=str, required=True, help="Output folder for JSON files")
     parser.add_argument("--exclude_test", action="store_true", help="Whether to exclude test data in the output")
     args = parser.parse_args()
- 
-    benchmark_data = []
-    for benchmark in args.exclude_benchmarks or []:
-        data = json.load(open(benchmark, "r"))
-        for item in data:
-            benchmark_data.append(item["problem"])
 
     merged_data = []
     id = 0
@@ -25,8 +19,6 @@ if __name__ == "__main__":
         data = json.load(open(input_file, "r"))
         sampled_data = random.sample(data, num_sample)
         for item in sampled_data:
-            if item["problem"] in benchmark_data:
-                continue
             item["id"] = id
             id += 1
             merged_data.append(item)

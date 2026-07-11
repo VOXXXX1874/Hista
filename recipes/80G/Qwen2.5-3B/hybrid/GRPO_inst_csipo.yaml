@@ -1,15 +1,15 @@
 # Model arguments
-model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+model_name_or_path: Qwen/Qwen2.5-3B-Instruct
 model_revision: main
 dtype: bfloat16
 attn_implementation: flash_attention_2
 
 # Training data arguments
-dataset_name: data/1_5B/ultra
+dataset_name: data/3B/hybrid
 
 # Algorithm arguments
-loss_type: "dapo"
-epsilon_high: 0.28
+loss_type: "cispo"
+epsilon_high: 5.0
 dynamic_sampling_scale: 2
 #overlong_punishment_threshold: 0.75
 
@@ -36,26 +36,26 @@ do_eval: true
 eval_strategy: "steps"
 eval_steps: 40
 num_generations_eval: 1
-quick_eval_dataset: data/1_5B/ultra
+quick_eval_dataset: data/3B/hybrid
 quick_eval_dataset_size: 3000
 
 # gradient checkpoint and lr
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: false
-learning_rate: 1.0e-06
+learning_rate: 5.0e-07
 lr_scheduler_type: constant
 
 # Batch config
-gradient_accumulation_steps: 8
-num_generations: 16
+gradient_accumulation_steps: 16
+num_generations: 8
 num_iterations: 4 
 num_train_epochs: 1
-per_device_eval_batch_size: 750
-per_device_train_batch_size: 2
+per_device_eval_batch_size: 3000
+per_device_train_batch_size: 4
 
 # saving
-output_dir: output/Qwen2.5-1.5B/GRPO-1.5B-dapo-ultra
+output_dir: output/Qwen2.5-3B/GRPO-3B-csipo-hybrid
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"

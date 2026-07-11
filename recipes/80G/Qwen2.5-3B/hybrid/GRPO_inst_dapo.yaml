@@ -1,0 +1,78 @@
+# Model arguments
+model_name_or_path: Qwen/Qwen2.5-3B-Instruct
+model_revision: main
+dtype: bfloat16
+attn_implementation: flash_attention_2
+
+# Training data arguments
+dataset_name: data/3B/hybrid
+
+# Algorithm arguments
+loss_type: "dapo"
+epsilon_high: 0.28
+dynamic_sampling_scale: 2
+#overlong_punishment_threshold: 0.75
+
+# reward config
+reward_funcs: ['accuracy']
+reward_weights: [1.0]
+
+# vllm config
+vllm_mode: colocate
+vllm_tensor_parallel_size: 1
+temperature: 0.7
+bf16: true
+use_vllm: true
+vllm_gpu_memory_utilization: 0.55
+max_completion_length: 4096
+vllm_enable_sleep_mode: true
+
+# verifier vllm config
+manage_verifier_vllm_sleep: true
+verifier_vllm_base_url: http://localhost:8000/v1
+
+# eval config
+do_eval: true
+eval_strategy: "steps"
+eval_steps: 40
+num_generations_eval: 1
+quick_eval_dataset: data/3B/hybrid
+quick_eval_dataset_size: 3000
+
+# gradient checkpoint and lr
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+learning_rate: 1.0e-06
+lr_scheduler_type: constant
+
+# Batch config
+gradient_accumulation_steps: 16
+num_generations: 16
+num_iterations: 4 
+num_train_epochs: 1
+per_device_eval_batch_size: 3000
+per_device_train_batch_size: 4
+
+# saving
+output_dir: output/Qwen2.5-3B/GRPO-3B-dapo-hybrid
+push_to_hub: False
+save_strategy: "best"
+metric_for_best_model: "rewards/mean"
+greater_is_better: True
+save_only_model: True
+save_total_limit: 1
+
+# logging
+report_to:
+- wandb
+log_completions: false
+log_level: info
+logging_steps: 1
+logging_strategy: steps
+seed: 42
+silence: true
+num_completions_to_print: 4
+
+# liger kernel
+use_liger_kernel: false

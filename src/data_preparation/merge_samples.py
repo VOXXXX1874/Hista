@@ -15,6 +15,8 @@ if __name__ == "__main__":
         data = json.load(open(input_file, "r"))
         for item in data:
             item["id"] = id
+            item["verifier"] = "code"
+            item["problem"] = item["problem"].replace("Allowed packages besides built-in packages:\n['numpy', 'scipy']\n-----Warning-----\nPlease do not involve any file I/O operations in your solution. We will automatically reject solutions that contain file I/O operations.", "You can use common packages like numpy and pandas. You can also use built-in functions and libraries.")
             id += 1
             merged_data.append(item)
 

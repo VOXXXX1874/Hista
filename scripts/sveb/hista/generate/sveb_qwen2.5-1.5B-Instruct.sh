@@ -1,10 +1,8 @@
-### normal base pure
-
 python src/sveb/hista/evaluate_sta_estim_generate.py \
 	--model_name Qwen/Qwen2.5-1.5B-Instruct \
-	--dataset_path data/1_5B/sveb_number/train.json \
-	--output_path output/sveb/Qwen2.5-1.5B-Instruct/number_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
-	--save_path output/sveb/Qwen2.5-1.5B-Instruct/number_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.json \
+	--dataset_path data/1.5B/sveb_number/train.json \
+	--output_path output/sveb/Qwen2.5-1.5B-Instruct/hista_sveb_number_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
+	--save_path output/sveb/Qwen2.5-1.5B-Instruct/sveb_number_S32_MCS20_NumPro3000.json \
 	--grpo_num 32 \
 	--mcs_num 20 \
 	--max_length 4096 \
@@ -22,9 +20,9 @@ python src/sveb/hista/evaluate_sta_estim_generate.py \
 
 python src/sveb/hista/evaluate_sta_estim_generate.py \
 	--model_name Qwen/Qwen2.5-1.5B-Instruct \
-	--dataset_path data/1_5B/SVEB-MATH/train.json \
-	--output_path output/sveb/Qwen2.5-1.5B-Instruct/math_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
-	--save_path output/sveb/Qwen2.5-1.5B-Instruct/math_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.json \
+	--dataset_path data/1.5B/SVEB-MATH/train.json \
+	--output_path output/sveb/Qwen2.5-1.5B-Instruct/hista_sveb_math_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
+	--save_path output/sveb/Qwen2.5-1.5B-Instruct/sveb_math_S32_MCS20_NumPro3000.json \
 	--grpo_num 32 \
 	--mcs_num 20 \
 	--max_length 4096 \
@@ -42,9 +40,9 @@ python src/sveb/hista/evaluate_sta_estim_generate.py \
 
 python src/sveb/hista/evaluate_sta_estim_generate.py \
 	--model_name Qwen/Qwen2.5-1.5B-Instruct \
-	--dataset_path data/1_5B/SVEB-PROGRAM/train.json \
-	--output_path output/sveb/Qwen2.5-1.5B-Instruct/program_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
-	--save_path output/sveb/Qwen2.5-1.5B-Instruct/program_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.json \
+	--dataset_path data/1.5B/SVEB-PROGRAM/train.json \
+	--output_path output/sveb/Qwen2.5-1.5B-Instruct/hista_sveb_program_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
+	--save_path output/sveb/Qwen2.5-1.5B-Instruct/sveb_program_S32_MCS20_NumPro3000.json \
 	--grpo_num 32 \
 	--mcs_num 20 \
 	--max_length 4096 \
@@ -62,9 +60,9 @@ python src/sveb/hista/evaluate_sta_estim_generate.py \
 
 python src/sveb/hista/evaluate_sta_estim_generate.py \
 	--model_name Qwen/Qwen2.5-1.5B-Instruct \
-	--dataset_path data/1_5B/SVEB-SCIENCE/train.json \
-	--output_path output/sveb/Qwen2.5-1.5B-Instruct/science_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
-	--save_path output/sveb/Qwen2.5-1.5B-Instruct/science_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.json \
+	--dataset_path data/1.5B/SVEB-SCIENCE/train.json \
+	--output_path output/sveb/Qwen2.5-1.5B-Instruct/hista_sveb_science_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
+	--save_path output/sveb/Qwen2.5-1.5B-Instruct/sveb_science_S32_MCS20_NumPro3000.json \
 	--grpo_num 32 \
 	--mcs_num 20 \
 	--max_length 4096 \
@@ -82,9 +80,9 @@ python src/sveb/hista/evaluate_sta_estim_generate.py \
 
 python src/sveb/hista/evaluate_sta_estim_generate.py \
 	--model_name Qwen/Qwen2.5-1.5B-Instruct \
-	--dataset_path data/1_5B/SVEB-GENERAL/train.json \
-	--output_path output/sveb/Qwen2.5-1.5B-Instruct/general_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
-	--save_path output/sveb/Qwen2.5-1.5B-Instruct/general_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.json \
+	--dataset_path data/1.5B/SVEB-GENERAL/train.json \
+	--output_path output/sveb/Qwen2.5-1.5B-Instruct/hista_sveb_general_S32_MCS20_t1_l1_max66_min6_m50_a07_mw5_mind5_uniform_ema_euclidean.log \
+	--save_path output/sveb/Qwen2.5-1.5B-Instruct/sveb_general_S32_MCS20_NumPro3000.json \
 	--grpo_num 32 \
 	--mcs_num 20 \
 	--max_length 4096 \

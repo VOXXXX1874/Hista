@@ -7,6 +7,7 @@ from vllm import LLM, SamplingParams
 # parse args
 import argparse
 import random
+import json
 from datasets import load_dataset
 from contextlib import redirect_stdout
 
@@ -30,11 +31,13 @@ def main(
     model_name,
     dataset_path,
     output_path,
+    save_path,
     mcs_num,
     grpo_num,
     max_length,
     num_of_problems,
     use_default_system_prompt=False,
+    tp=1,
     enable_thinking=False,
 ):
     # Create a sampling params object.
@@ -51,14 +54,16 @@ def main(
     # Create LLM object
     llm = LLM(model=model_name,  # replace your own model
                 dtype='bfloat16',
-                tensor_parallel_size=1,  # number of gpu
+                tensor_parallel_size=tp,  # number of gpu
                 gpu_memory_utilization=0.7,  # prevent OOM
                 trust_remote_code=True,
                 )
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    dataset = load_dataset(dataset_path, split='train')
+    with open(dataset_path, 'r') as f:
+        dataset = json.load(f)
+    
     # random sample with num_of_problems, which can be larger than the dataset size but repeatable
     dataset = random.choices(dataset, k=num_of_problems)
     prompts = []
@@ -104,6 +109,7 @@ def main(
     init_unbiased_mae_list = []
     grpo_unbiased_mae_list = []
     unbiased_noise_mae_list = [[] for _ in range(mcs_num)]
+    result_list = []
     # Open the output file
     with open(output_path, 'w') as f:
         # Redirect print statements to the file
@@ -121,6 +127,13 @@ def main(
                     problems=[problem]*len(completions)
                 )
                 grpo_init_state_value = sum(rewards) / len(rewards)
+                correct_responses = []
+                wrong_responses = []
+                for completion, reward in zip(completions, rewards):
+                    if reward > 0:
+                        correct_responses.append(completion)
+                    else:
+                        wrong_responses.append(completion)
 
                 # Build the online NumCA table from the sampled completions.
                 problem_numca_dict = Numca_dict()
@@ -185,7 +198,7 @@ def main(
 
 
                 used_samples = 1
-                while used_samples < mcs_num:
+                while used_samples <= mcs_num:
                     print("Used Samples:", used_samples)
                     # Random sample used_samples responses for estimating the unbiased value function with less samples
                     sampled_list = random.sample(list(range(len(mcs_rewards))), min(used_samples, len(mcs_rewards)))
@@ -197,6 +210,23 @@ def main(
                     print("--------------------------------------------------")
                 print("==================================================")
 
+                result = {
+                    "problem": problem,
+                    "solution": data["solution"],
+                    "verifier": data.get("verifier", None),
+                    "correct_responses": correct_responses,
+                    "wrong_responses": wrong_responses,
+                    "response": response,
+                    "sampled_response": response[:MCTS_position],
+                    "output_reward": final_reward,
+                    "unbiased_state_value": unbiased_state_value,
+                    "unbiased_state_value_noise": [
+                        unbiased_noise_mae_list[used_samples-1][-1]
+                        for used_samples in range(1, mcs_num+1)
+                    ],
+                }
+                result_list.append(result)
+
             print("Average Estimation mae between Estimated and Unbiased Value Function:", sum(estimation_unbiased_mae_list) / len(estimation_unbiased_mae_list))
             print("Average Estimation mae between Init and Unbiased Value Function:", sum(init_unbiased_mae_list) / len(init_unbiased_mae_list))
             print("Average Estimation mae between GRPO and Unbiased Value Function:", sum(grpo_unbiased_mae_list) / len(grpo_unbiased_mae_list))
@@ -206,17 +236,23 @@ def main(
                 else:
                     print("Average Unbiased Value Function Noise mae with {} samples: {}".format(i+1, "Unavailable"))
 
+    if save_path is not None:
+        with open(save_path, 'w') as f:
+            json.dump(result_list, f, indent=4)
+
 if __name__ == "__main__":
     # parse the arguments: model_name, dataset_path, output_path
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-1.5B-instruct")
     parser.add_argument("--dataset_path", type=str, default="data/training_cache/")
     parser.add_argument("--output_path", type=str, default="output/adv_estim_sampling.log")
+    parser.add_argument("--save_path", type=str, default=None)
     parser.add_argument("--mcs_num", type=int, default=50)
     parser.add_argument("--grpo_num", type=int, default=1)
     parser.add_argument("--max_length", type=int, default=16384)
     parser.add_argument("--num_of_problems", type=int, default=1000)
     parser.add_argument("--use_default_system_prompt", action='store_true', help="Use default system prompt if set.")
+    parser.add_argument("--tp", type=int, default=1)
     parser.add_argument("--enable_thinking", action='store_true', help="Whether to enable thinking mode for qwen3.")
 
     args = parser.parse_args()
@@ -225,10 +261,12 @@ if __name__ == "__main__":
         model_name=args.model_name,
         dataset_path=args.dataset_path,
         output_path=args.output_path,
+        save_path=args.save_path,
         mcs_num=args.mcs_num,
         grpo_num=args.grpo_num,
         max_length=args.max_length,
         num_of_problems=args.num_of_problems,
         use_default_system_prompt=args.use_default_system_prompt,
+        tp=args.tp,
         enable_thinking=args.enable_thinking,
     )

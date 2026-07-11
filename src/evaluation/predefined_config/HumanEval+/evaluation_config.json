@@ -2,15 +2,15 @@
     "qwen2.5": {
         "max_output_tokens": 4096,
         "use_default_system_prompt": false,
-        "temperature": 0.0,
-        "num_generations": 1,
+        "temperature": 0.1,
+        "num_generations": 4,
         "reward_function": "eval_answer_reward"
     },
     "qwen3": {
         "max_output_tokens": 16384,
         "use_default_system_prompt": false,
-        "temperature": 0.0,
-        "num_generations": 1,
+        "temperature": 0.1,
+        "num_generations": 4,
         "reward_function": "eval_answer_reward"
     }
 }

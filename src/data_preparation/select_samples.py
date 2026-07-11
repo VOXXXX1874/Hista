@@ -28,7 +28,7 @@ def main(data_path, output_path, upper, lower, keep_responses, targets_num):
     suitable_dataset = []
     # Iterate through each item in the dataset
     for item in original_dataset:
-        if len(item['correct_responses']) / (len(item['wrong_responses']) + len(item['correct_responses'])) <= lower or len(item['correct_responses']) / (len(item['wrong_responses']) + len(item['correct_responses'])) > upper:
+        if (len(item['wrong_responses']) + len(item['correct_responses'])) <= 0 or len(item['correct_responses']) / (len(item['wrong_responses']) + len(item['correct_responses'])) <= lower or len(item['correct_responses']) / (len(item['wrong_responses']) + len(item['correct_responses'])) > upper:
             continue
         # Extract the question, solution, and answer from the item
         question = item['problem']

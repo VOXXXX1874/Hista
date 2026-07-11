@@ -5,7 +5,7 @@ dtype: bfloat16
 attn_implementation: flash_attention_2
 
 # Training data arguments
-dataset_name: data/1_5B/ultra
+dataset_name: data/1.5B/hybrid
 
 # Algorithm arguments
 loss_type: "cispo"
@@ -45,7 +45,7 @@ do_eval: true
 eval_strategy: "steps"
 eval_steps: 40
 num_generations_eval: 1
-quick_eval_dataset: data/1_5B/ultra
+quick_eval_dataset: data/1.5B/hybrid
 quick_eval_dataset_size: 3000
 
 # gradient checkpoint and lr
@@ -64,7 +64,7 @@ per_device_eval_batch_size: 3000
 per_device_train_batch_size: 4
 
 # saving
-output_dir: output/Qwen2.5-1.5B/Hista-1.5B-csipo-ultra
+output_dir: output/Qwen2.5-1.5B/Hista-1.5B-csipo-hybrid
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"

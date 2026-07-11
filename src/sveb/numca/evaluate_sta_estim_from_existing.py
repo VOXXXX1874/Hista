@@ -10,13 +10,7 @@ def main(
     dataset_path,
     output_path,
     num_of_problems,
-    use_default_system_prompt=False,
-    enable_thinking=False,
 ):
-    # Existing samples already include prompt-dependent model outputs. These
-    # options are accepted for CLI parity with the generation script.
-    _ = (use_default_system_prompt, enable_thinking)
-
     # Load the dataset
     with open(dataset_path, 'r') as f:
         dataset = json.load(f)
@@ -127,8 +121,6 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_path", type=str, default="data/adv_estim_generate/1dot5B_dapo_1737_40/train.json")
     parser.add_argument("--output_path", type=str, default="output/adv_estim_sampling.log")
     parser.add_argument("--num_of_problems", type=int, default=1000)
-    parser.add_argument("--use_default_system_prompt", action='store_true', help="Use default system prompt if set.")
-    parser.add_argument("--enable_thinking", action='store_true', help="Whether to enable thinking mode for qwen3.")
 
     args = parser.parse_args()
 
@@ -136,6 +128,4 @@ if __name__ == "__main__":
         dataset_path=args.dataset_path,
         output_path=args.output_path,
         num_of_problems=args.num_of_problems,
-        use_default_system_prompt=args.use_default_system_prompt,
-        enable_thinking=args.enable_thinking,
     )

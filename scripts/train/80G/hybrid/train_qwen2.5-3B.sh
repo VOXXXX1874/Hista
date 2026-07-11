@@ -6,9 +6,9 @@ accelerate launch \
 --main_process_port 29501 \
 --num_processes=1 \
 src/rl/grpo.py \
---config recipes/80G/Qwen2.5-1.5B/hybrid/GRPO_inst_dapo.yaml \
+--config recipes/80G/Qwen2.5-3B/hybrid/GRPO_inst_dapo.yaml \
 --verifier_vllm_base_url http://localhost:8000/v1 \
-> ./output/Qwen2.5-1.5B/GRPO_inst_hybrid_dapo_sampling.log 2>&1
+> ./output/Qwen2.5-3B/GRPO_inst_hybrid_dapo_sampling.log 2>&1
 
 ## dapo + hista
 
@@ -18,9 +18,9 @@ accelerate launch \
 --num_processes=1 \
 --main_process_port 29500 \
 src/rl/hista.py \
---config recipes/80G/Qwen2.5-1.5B/hybrid/Hista_inst_dapo.yaml \
+--config recipes/80G/Qwen2.5-3B/hybrid/Hista_inst_dapo.yaml \
 --verifier_vllm_base_url http://localhost:9000/v1 \
-> ./output/Qwen2.5-1.5B/Hista_inst_hybrid_dapo_sampling.log 2>&1
+> ./output/Qwen2.5-3B/Hista_inst_hybrid_dapo_sampling.log 2>&1
 
 ## csipo
 
@@ -30,9 +30,9 @@ accelerate launch \
 --main_process_port 29501 \
 --num_processes=1 \
 src/rl/grpo.py \
---config recipes/80G/Qwen2.5-1.5B/hybrid/GRPO_inst_csipo.yaml \
---verifier_vllm_base_url http://localhost:8000/v1 \
-> ./output/Qwen2.5-1.5B/GRPO_inst_hybrid_csipo_sampling.log 2>&1
+--config recipes/80G/Qwen2.5-3B/hybrid/GRPO_inst_csipo.yaml \
+--verifier_vllm_base_url http://localhost:9000/v1 \
+> ./output/Qwen2.5-3B/GRPO_inst_hybrid_csipo_sampling.log 2>&1
 
 ## csipo + hista
 
@@ -42,6 +42,6 @@ accelerate launch \
 --num_processes=1 \
 --main_process_port 29500 \
 src/rl/hista.py \
---config recipes/80G/Qwen2.5-1.5B/hybrid/Hista_inst_csipo.yaml \
+--config recipes/80G/Qwen2.5-3B/hybrid/Hista_inst_csipo.yaml \
 --verifier_vllm_base_url http://localhost:9000/v1 \
-> ./output/Qwen2.5-1.5B/Hista_inst_hybrid_csipo_sampling.log 2>&1
+> ./output/Qwen2.5-3B/Hista_inst_hybrid_csipo_sampling.log 2>&1

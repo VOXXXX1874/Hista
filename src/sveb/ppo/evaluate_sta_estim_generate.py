@@ -46,7 +46,6 @@ def main(
     critic_model_path,
     value_head_path,
     dataset_path,
-    split,
     output_path,
     save_path,
     grpo_num,
@@ -79,7 +78,8 @@ def main(
     )
     tokenizer = AutoTokenizer.from_pretrained(action_model_name)
 
-    dataset = load_dataset(dataset_path, split=split)
+    with open(dataset_path, 'r') as f:
+        dataset = json.load(f)
     dataset = random.choices(dataset, k=num_of_problems)
 
     prompts = []
@@ -258,7 +258,6 @@ if __name__ == "__main__":
     parser.add_argument("--critic_model_path", type=str, required=True)
     parser.add_argument("--value_head_path", type=str, required=True)
     parser.add_argument("--dataset_path", type=str, default="data/training_cache/")
-    parser.add_argument("--split", type=str, default="train")
     parser.add_argument("--output_path", type=str, default="output/adv_estim_sampling.log")
     parser.add_argument("--save_path", type=str, default=None)
     parser.add_argument("--grpo_num", type=int, default=20)
@@ -276,7 +275,6 @@ if __name__ == "__main__":
         critic_model_path=args.critic_model_path,
         value_head_path=args.value_head_path,
         dataset_path=args.dataset_path,
-        split=args.split,
         output_path=args.output_path,
         save_path=args.save_path,
         grpo_num=args.grpo_num,

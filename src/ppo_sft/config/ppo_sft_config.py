@@ -4,8 +4,6 @@ from typing import Optional
 
 import trl
 
-from trl import ScriptArguments
-
 @dataclass
 class SFTConfig(trl.SFTConfig):
     """
@@ -44,4 +42,8 @@ class SFTConfig(trl.SFTConfig):
     trainable_layers: Optional[list[str]] = field(
         default=None,
         metadata={"help": "List of layer name patterns to keep trainable. All other layers will be frozen. Example: ['model.layers.23', 'lm_head']"},
+    )
+    gae_lambda: float = field(
+        default=0.95,
+        metadata={"help": "Lambda used by GAE for PPO critic targets (discount factor is fixed to 1)."},
     )

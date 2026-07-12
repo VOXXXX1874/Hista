@@ -1,18 +1,14 @@
 from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
 # import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 # parse args
 import argparse
-import random
+import json
 from contextlib import redirect_stdout
-import gc
-import torch
-from rl.utils.rewards import eval_answer_reward
 from rl.utils.hista_utils import *
 from rl.utils.prepare_dataset import *
 from tqdm import tqdm
-import json
+from sveb.common import EvaluationReporter, generate_rollouts, make_result, noise_maes, score_responses, split_responses
 
 def main(
     model_name,
@@ -37,100 +33,13 @@ def main(
     tp = 1,
     enable_thinking=False,
 ):
-    # Create a sampling params object.
-    sampling_params= SamplingParams(temperature=0.7,
-                                        max_tokens=max_length,
-                                        n = grpo_num,
-                                        seed = random.randint(0, 10000)
-                                        )
-    sampling_params_MCTS = SamplingParams(temperature=0.7,
-                                        max_tokens=max_length,
-                                        n = mcs_num,
-                                        seed = random.randint(0, 10000)
-                                        )
-    # Create LLM object
-    llm = LLM(model=model_name,  # replace your own model
-                dtype='bfloat16',
-                tensor_parallel_size=tp,  # number of gpu
-                gpu_memory_utilization=0.7,  # prevent OOM
-                trust_remote_code=True,
-                )
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    with open(dataset_path, 'r') as f:
-        dataset = json.load(f)
-
-    # Deduplicate the dataset based on the 'problem' field
-    unique_problems = set()
-    deduplicated_dataset = []
-    for data in dataset:
-        problem = data["problem"]
-        if problem not in unique_problems:
-            unique_problems.add(problem)
-            deduplicated_dataset.append(data)
-    dataset = deduplicated_dataset
-
-    # random sample with num_of_problems
-    dataset = random.sample(dataset, min(num_of_problems, len(dataset)))
-    prompts = []
-    for data in dataset:
-        if use_default_system_prompt:
-            prompt = [
-                {"role": "user", "content": data["problem"]}
-            ]
-        else:
-            if data.get("verifier", None) == "code":
-                system_prompt = SYSTEM_PROMPT_CODE
-            else:
-                system_prompt = SYSTEM_PROMPT
-            prompt = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": data["problem"]}
-            ]
-        #print("DEBUG prompt: ", prompt)
-        input_prompt = tokenizer.apply_chat_template(prompt, tokenize=False, add_generation_prompt=True, enable_thinking=enable_thinking)
-        #print("DEBUG input_prompt: ", input_prompt)
-        prompts.append(input_prompt)
-
-    # Generate answers
-    outputs = llm.generate(prompts, sampling_params=sampling_params,)
-
-    # MCTS prompts
-    MCTS_prompts = []
-    MCTS_positions = []
-    for data, output in zip(dataset, outputs):
-        response = output.outputs[0].text
-        # Random select a position of ' ' from the sample response
-        space_positions = [i for i, char in enumerate(
-            response) if char == ' ']
-        if not space_positions:
-            selected_position = len(response)
-        else:
-            selected_position = random.choice(space_positions)
-        MCTS_positions.append(selected_position)
-        if use_default_system_prompt:
-            MCTS_prompt = [{"role": "user", "content": data["problem"]},]
-        else:
-            if data.get("verifier", None) == "code":
-                system_prompt = SYSTEM_PROMPT_CODE
-            else:
-                system_prompt = SYSTEM_PROMPT
-            MCTS_prompt = [{"role": "system", "content": system_prompt},
-                        {"role": "user", "content": data["problem"]},]
-            
-        #print("DEBUG MCTS prompt: ", MCTS_prompt)
-        MCTS_input_prompt = tokenizer.apply_chat_template(MCTS_prompt, tokenize=False, add_generation_prompt=True, enable_thinking=enable_thinking) + response[:selected_position]
-        #print("DEBUG MCTS input_prompt: ", MCTS_input_prompt)
-        MCTS_prompts.append(MCTS_input_prompt)
-
-    # Generate MCTS answers
-    MCTS_outputs = llm.generate(MCTS_prompts, sampling_params=sampling_params_MCTS)
-
-    # Remove the model from GPU to save memory
-    del llm
-    gc.collect()
-    torch.cuda.empty_cache()
+    rollouts = generate_rollouts(
+        model_name, dataset_path, num_of_problems, grpo_num, mcs_num,
+        max_length, use_default_system_prompt, tp, enable_thinking,
+        temperature=0.7, replace=False, deduplicate=True,
+    )
+    dataset, outputs, tokenizer = rollouts.dataset, rollouts.outputs, rollouts.tokenizer
+    MCTS_outputs, MCTS_positions = rollouts.continuation_outputs, rollouts.positions
     model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype="auto", device_map="auto", attn_implementation="flash_attention_2")
 
     problems_offline_responses = {}
@@ -138,24 +47,9 @@ def main(
     # Encode all offline problems and responses
     for data, output in tqdm(zip(dataset, outputs), total=len(dataset)):
         problem = data["problem"]
-        responses = [output.outputs[i].text for i in range(len(output.outputs))]
-        correct_responses = []
-        wrong_responses = []
-        
-        # Calculate rewards for all responses
-        completions = responses
-        solutions = [data["solution"] if data.get("verifier", None) == "code" or data.get("verifier", None) == "general" else '$' + data["solution"] + '$' for _ in range(len(responses))]
-        verifiers = [data.get("verifier", None) for _ in range(len(responses))]
-        rewards = eval_answer_reward(completions = completions, 
-                                     solutions = solutions, 
-                                     silence=True,
-                                     verifiers=verifiers, 
-                                     problems=[problem]*len(responses))
-        for response, reward in zip(responses, rewards):
-            if reward > 0:
-                correct_responses.append(response)
-            else:
-                wrong_responses.append(response)
+        responses = [item.text for item in output.outputs]
+        rewards = score_responses(data, responses)
+        correct_responses, wrong_responses = split_responses(responses, rewards)
 
         rewards = [1.0] * len(correct_responses) + [0.0] * len(wrong_responses)
         data["correct_responses"] = correct_responses
@@ -165,9 +59,7 @@ def main(
         problems_offline_responses[problem] = offline_response
         problems_offline_rewards[problem] = rewards
 
-    unbiased_noise_mae_list = [[] for _ in range(mcs_num)]
-    estimation_unbiased_mae_list = []
-    grpo_unbiased_mae_list = []
+    reporter = EvaluationReporter()
     result_list = []
     # Open the output file
     with open(output_path, 'w') as f:
@@ -252,65 +144,25 @@ def main(
 
                 MCTS_responses = [response[:MCTS_position] + o.text for o in MCTS_output.outputs]
                 # Compute the rewards for MCTS responses
-                completions = MCTS_responses
-                solutions = [data["solution"] if data.get("verifier", None) == "code" or data.get("verifier", None) == "general" else '$' + data["solution"] + '$' for _ in range(len(MCTS_responses))]
-                verifiers = [data.get("verifier", None) for _ in range(len(MCTS_responses))]
-                MCTS_rewards = eval_answer_reward(completions = completions, 
-                                                 solutions = solutions, 
-                                                 silence=True,
-                                                 verifiers=verifiers, 
-                                                 problems=[problem]*len(MCTS_responses))
+                MCTS_rewards = score_responses(data, MCTS_responses)
                 correct_list = [1 if r > 0 else 0 for r in MCTS_rewards]
                 unbiased_state_value = sum(correct_list) / len(correct_list)
 
                 grpo_state_value = len(data["correct_responses"]) / (len(data["correct_responses"]) + len(data["wrong_responses"]))
 
-                # print the prompt, sampled response, selected position, estimated value function, unbiased value function, mae between estimated and unbiased value function
-                print("Problem:", data["problem"])
-                print("--------------------------------------------------")
-                print("Response until Selected Position:", response[:MCTS_position])
-                print("--------------------------------------------------")
-                print("Final Reward of Sampled Response:", response_reward)
-                print("--------------------------------------------------")
-                print("Estimated Value Function with k:", estimated_value)
-                print("Unbiased Value Function:", unbiased_state_value)
-                print("GRPO Value Function:", grpo_state_value)
-                estimation_unbiased_mae_list.append(abs(estimated_value - unbiased_state_value))
-                grpo_unbiased_mae_list.append(abs(grpo_state_value - unbiased_state_value))
-                used_samples = 1
-                while used_samples <= mcs_num:
-                    print("Used Samples:", used_samples)
-                    # Random sample used_samples responses for estimating the unbiased value function with less samples
-                    sampled_list = random.sample(list(range(len(correct_list))), min(used_samples, len(correct_list)))
-                    sampled_correct_list = [correct_list[i] for i in sampled_list]
-                    sampled_unbiased_state_value = sum(sampled_correct_list) / len(sampled_correct_list)
-                    print("Unbiased Value Function with {} samples: {}".format(used_samples, sampled_unbiased_state_value))
-                    print("mae of unbiased value function with {} samples: {}".format(used_samples, abs(unbiased_state_value - sampled_unbiased_state_value)))
-                    unbiased_noise_mae_list[used_samples-1].append(abs(unbiased_state_value - sampled_unbiased_state_value))
-                    used_samples += 1
-                    print("--------------------------------------------------")
-                print("==================================================")
-
-                result = {
-                    "problem": problem,
-                    "solution": data["solution"],
-                    "correct_responses": data["correct_responses"],
-                    "wrong_responses": data["wrong_responses"],
-                    "response": response,
-                    "sampled_response": response[:MCTS_position],
-                    "output_reward": response_reward,
-                    "unbiased_state_value": unbiased_state_value,
-                    "unbiased_state_value_noise": [unbiased_noise_mae_list[used_samples-1][-1] for used_samples in range(1, mcs_num+1)],
-                }
+                case_noise = noise_maes(correct_list, range(1, mcs_num + 1))
+                case_data = dict(data, sampled_response=response[:MCTS_position],
+                                 output_reward=response_reward,
+                                 unbiased_state_value=unbiased_state_value)
+                reporter.add(case_data, estimated_value, grpo_state_value,
+                             full_response=response, position=MCTS_position, noise=case_noise)
+                result = make_result(case_data, data["correct_responses"],
+                                     data["wrong_responses"], response,
+                                     response[:MCTS_position], response_reward,
+                                     unbiased_state_value, case_noise)
                 result_list.append(result)
 
-            print("Average mae between Estimated and Unbiased Value Function:", sum(estimation_unbiased_mae_list) / len(estimation_unbiased_mae_list))
-            print("Average mae between GRPO Unbiased and Unbiased Value Function:", sum(grpo_unbiased_mae_list) / len(grpo_unbiased_mae_list))
-            for i in range(mcs_num):
-                if len(unbiased_noise_mae_list[i]) > 0:
-                    print("Average Unbiased Value Function Noise mae with {} samples: {}".format(i+1, sum(unbiased_noise_mae_list[i]) / len(unbiased_noise_mae_list[i])))
-                else:
-                    print("Average Unbiased Value Function Noise mae with {} samples: {}".format(i+1, "Unavailable"))
+            reporter.summary()
 
     if save_path is not None:
         with open(save_path, 'w') as f:
@@ -332,8 +184,8 @@ if __name__ == "__main__":
     parser.add_argument("--max_k", type=int, default=66)
     parser.add_argument("--min_k", type=int, default=6)
     parser.add_argument("--min_interval", type=int, default=50)
-    parser.add_argument("--alpha", type=float, default=0.97)
-    parser.add_argument("--mean_window", type=int, default=100)
+    parser.add_argument("--alpha", type=float, default=0.7)
+    parser.add_argument("--mean_window", type=int, default=5)
     parser.add_argument("--min_distance", type=float, default=5.0)
     parser.add_argument("--selection_method", type=str, default="distance", help="Method for selecting embeddings: embedding_selection_based_on_distance or embedding_selection_uniform")
     parser.add_argument("--average_method", type=str, default="ema", help="Method for averaging embeddings: ema or mean")
@@ -370,6 +222,3 @@ if __name__ == "__main__":
         tp=args.tp,
         enable_thinking=args.enable_thinking
     )
-
-# Usage example:
-# PYTHONPATH=src python -m cv_extraction.evaluate_adv_estim --model_name "Qwen/Qwen2.5-1.5B-instruct" --dataset_path "data/training_cache/" --output_path "output/adv_estim_sampling.log" --num 50 --max_length 16384 --num_of_problems 4000

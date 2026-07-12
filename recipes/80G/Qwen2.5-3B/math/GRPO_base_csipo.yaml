@@ -1,11 +1,11 @@
 # Model arguments
-model_name_or_path: Qwen/Qwen2.5-3B-Instruct
+model_name_or_path: Qwen/Qwen2.5-1.5B
 model_revision: main
 dtype: bfloat16
 attn_implementation: flash_attention_2
 
 # Training data arguments
-dataset_name: data/3B/hybrid
+dataset_name: data/MATH
 
 # Algorithm arguments
 loss_type: "cispo"
@@ -16,15 +16,6 @@ dynamic_sampling_scale: 2
 # reward config
 reward_funcs: ['accuracy']
 reward_weights: [1.0]
-
-# Hista specific arguments
-hista_min_interval: 50
-hista_alpha: 0.7
-hista_mean_window: 5
-hista_min_d: 5
-hista_max_k: 66
-hista_min_k: 6
-gae_lambda: 1.0
 
 # vllm config
 vllm_mode: colocate
@@ -38,15 +29,15 @@ vllm_enable_sleep_mode: true
 
 # verifier vllm config
 manage_verifier_vllm_sleep: true
-verifier_vllm_base_url: http://localhost:8000/v1
+verifier_vllm_base_url: http://localhost:9000/v1
 
 # eval config
 do_eval: true
 eval_strategy: "steps"
 eval_steps: 40
 num_generations_eval: 1
-quick_eval_dataset: data/3B/hybrid
-quick_eval_dataset_size: 3000
+quick_eval_dataset: data/MATH
+quick_eval_dataset_size: 4000
 
 # gradient checkpoint and lr
 gradient_checkpointing: true
@@ -56,15 +47,15 @@ learning_rate: 1.0e-06
 lr_scheduler_type: constant
 
 # Batch config
-gradient_accumulation_steps: 16
-num_generations: 16
+gradient_accumulation_steps: 32
+num_generations: 32
 num_iterations: 4 
 num_train_epochs: 1
-per_device_eval_batch_size: 3000
-per_device_train_batch_size: 8
+per_device_eval_batch_size: 4000
+per_device_train_batch_size: 4
 
 # saving
-output_dir: output/Qwen2.5-3B/Hista-3B-csipo-hybrid
+output_dir: output/Qwen2.5-1.5B/GRPO-1.5B-base-csipo
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"
@@ -75,13 +66,13 @@ save_total_limit: 1
 # logging
 report_to:
 - wandb
-log_completions: True
+log_completions: False
 log_level: info
 logging_steps: 1
 logging_strategy: steps
 seed: 42
 silence: true
-num_completions_to_print: 4
+num_completions_to_print: 24
 
 # liger kernel
 use_liger_kernel: false

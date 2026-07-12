@@ -28,7 +28,7 @@ temperature: 0.7
 bf16: true
 use_vllm: true
 vllm_gpu_memory_utilization: 0.55
-max_completion_length: 2048
+max_completion_length: 4096
 vllm_enable_sleep_mode: true
 
 # eval config

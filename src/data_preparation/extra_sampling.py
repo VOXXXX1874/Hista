@@ -7,6 +7,8 @@ from rl.utils.prepare_dataset import prepare_dataset
 from rl.utils.rewards import eval_answer_reward
 from vllm_verifier.control import control_verifier_vllm
 
+random.seed(42)
+
 def main(model_name, dataset_path, output_path, num, max_length, tp, use_default_prompt, total_num, proxy_url):
 
     os.environ["VERIFIER_BASE_URL"] = f"{proxy_url}/v1"
@@ -66,7 +68,7 @@ def main(model_name, dataset_path, output_path, num, max_length, tp, use_default
         for i in range(len(output.outputs)):
             completions.append(output.outputs[i].text)
 
-        rewards = eval_answer_reward(completions, [data['solution']] * len(completions), verifiers=data['verifier'] * len(completions), problems = [data['problem']] * len(completions))
+        rewards = eval_answer_reward(completions, [data['solution']] * len(completions), verifiers=[data['verifier']] * len(completions), problems = [data['problem']] * len(completions))
         
         for completion, reward in zip(completions, rewards):
             if reward > 0.5:
@@ -76,6 +78,9 @@ def main(model_name, dataset_path, output_path, num, max_length, tp, use_default
 
         data['correct_responses'] = correct_responses
         data['wrong_responses'] = wrong_responses
+        data.pop('prompt', None)
+        data.pop('silence', None)
+        data['solution'] = data['solution'][1:-1] if data.get('verifier', 'default') == 'default' else data['solution']
 
         results.append(data)
 

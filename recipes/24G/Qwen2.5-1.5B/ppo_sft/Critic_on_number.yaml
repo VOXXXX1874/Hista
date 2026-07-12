@@ -1,0 +1,56 @@
+# Model arguments
+model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct
+model_revision: main
+dtype: bfloat16
+attn_implementation: flash_attention_2
+
+# Data training arguments
+dataset_name: data/1.5B/ppo-n/number
+remove_unused_columns: false
+
+# PPO SFT trainer config
+trainer_type: "PPOSFTTrainer"
+bf16: true
+gae_lambda: 1.0
+
+# Evaluation config
+do_eval: true
+eval_strategy: "steps"
+eval_steps: 40
+
+# Logging config
+log_level: info
+logging_steps: 1
+logging_strategy: steps
+
+# Learning rate and optimizer config
+learning_rate: 3.0e-06
+lr_scheduler_type: cosine_with_min_lr
+lr_scheduler_kwargs:
+  min_lr_rate: 0.1
+warmup_ratio: 0.05
+
+# Batch config
+packing: false
+max_length: 4096
+max_steps: -1
+num_train_epochs: 1
+per_device_eval_batch_size: 4
+per_device_train_batch_size: 4
+gradient_accumulation_steps: 8
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+
+# Save and output config
+output_dir: output/Qwen2.5-1.5B/Critic_on_number
+overwrite_output_dir: true
+push_to_hub: False
+report_to:
+- wandb
+save_strategy: "best"
+save_only_model: True
+save_total_limit: 1
+metric_for_best_model: "loss"
+greater_is_better: false
+seed: 42

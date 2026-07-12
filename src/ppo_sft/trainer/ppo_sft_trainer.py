@@ -13,17 +13,15 @@
 # limitations under the License.
 
 import contextlib
-import dataclasses
 import os
 import warnings
 from collections import defaultdict
-from typing import Any, Callable, Optional, Type, Union, Dict
+from typing import Any, Callable, Optional, Type, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import transformers
-from accelerate import PartialState
 from datasets import Dataset, IterableDataset
 from packaging import version
 from transformers import (
@@ -31,18 +29,16 @@ from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     BaseImageProcessor,
-    DataCollator,
     FeatureExtractionMixin,
     PreTrainedModel,
     PreTrainedTokenizerBase,
     ProcessorMixin,
     TrainingArguments,
-    is_wandb_available,
 )
 from trl import SFTTrainer
 from transformers.trainer_callback import TrainerCallback
 from transformers.trainer_utils import EvalPrediction
-from transformers.utils import is_liger_kernel_available, is_peft_available
+from transformers.utils import is_peft_available
 from trl import ModelConfig, get_kbit_device_map, get_quantization_config
 from packaging.version import Version
 from trl.trainer.sft_config import SFTConfig
@@ -53,19 +49,10 @@ from trl.models import get_act_offloading_ctx_manager
 from transformers.utils import (
     is_safetensors_available,
     logging,
-    SAFE_WEIGHTS_NAME,
-    WEIGHTS_NAME,
 )
 
 if is_peft_available():
-    import peft
-    from peft import PeftConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
-
-if is_liger_kernel_available():
-    from liger_kernel.transformers import AutoLigerKernelForCausalLM
-
-if is_wandb_available():
-    import wandb
+    from peft import PeftConfig
 
 if is_safetensors_available():
     import safetensors.torch
@@ -77,11 +64,20 @@ class CriticModelWrapper(nn.Module):
     Wrapper that combines a frozen action model (language model) with a critic value head.
     The action model extracts hidden states, and the critic head predicts values.
     """
-    def __init__(self, action_model: PreTrainedModel, critic_model: PreTrainedModel):
+    def __init__(
+        self,
+        action_model: PreTrainedModel,
+        critic_model: PreTrainedModel,
+        gae_lambda: float = 0.95,
+    ):
         super().__init__()
+        if not 0.0 <= gae_lambda <= 1.0:
+            raise ValueError(f"`gae_lambda` must be in [0, 1], got {gae_lambda}.")
+
         self.action_model = action_model
         self.critic_model = critic_model
         self.config = critic_model.config
+        self.gae_lambda = gae_lambda
         
         # Freeze the action model
         for param in self.action_model.parameters():
@@ -107,34 +103,35 @@ class CriticModelWrapper(nn.Module):
         Args:
             input_ids: Input token ids
             attention_mask: Attention mask
-            labels: Target values (rewards) for MSE loss
+            labels: Sequence-level terminal rewards with shape ``[batch_size]``
             
         Returns:
             Dictionary containing loss, values, and hidden states
         """
         batch_size, seq_length = input_ids.shape
         
-        # Get hidden states from frozen action model
+        # Run only the transformer backbones. Calling AutoModelForCausalLM here
+        # would also materialize unused [batch, sequence, vocabulary] logits for
+        # both models, which is prohibitively expensive for long sequences.
+        action_backbone = self.action_model.base_model
         with torch.no_grad():
-            action_outputs = self.action_model(
+            action_outputs = action_backbone(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                output_hidden_states=True,
                 **kwargs
             )
-            # Use the last layer hidden states
-            hidden_states = action_outputs.hidden_states[-1]  # [batch_size, seq_length, hidden_size]
+            hidden_states = action_outputs.last_hidden_state  # [batch_size, seq_length, hidden_size]
         
-        critic_outputs = self.critic_model(
+        critic_backbone = self.critic_model.base_model
+        critic_outputs = critic_backbone(
             inputs_embeds=hidden_states,
             attention_mask=attention_mask,
-            output_hidden_states=True,
             **kwargs
         )
         
         # Implementation 1: Predict values for each position
         # Get the last layer hidden states from critic
-        critic_hidden_states = critic_outputs.hidden_states[-1]  # [batch_size, seq_length, hidden_size]
+        critic_hidden_states = critic_outputs.last_hidden_state  # [batch_size, seq_length, hidden_size]
         # Predict values for each position
         values = self.value_head(critic_hidden_states).squeeze(-1)  # [batch_size, seq_length]
 
@@ -144,14 +141,58 @@ class CriticModelWrapper(nn.Module):
         
         loss = None
         if labels is not None:
-            # Compute MSE loss between predicted values and target rewards
-            # labels should be [batch_size] containing the total reward for each sequence
-            target_rewards = labels
-            loss = F.mse_loss(values, target_rewards)
+            if attention_mask is None:
+                value_mask = torch.ones_like(values, dtype=torch.bool)
+            else:
+                value_mask = attention_mask.to(device=values.device, dtype=torch.bool)
+
+            target_rewards = labels.to(device=values.device, dtype=values.dtype)
+            if target_rewards.ndim == 2 and target_rewards.shape[-1] == 1:
+                target_rewards = target_rewards.squeeze(-1)
+            if target_rewards.ndim != 1 or target_rewards.shape[0] != batch_size:
+                raise ValueError(
+                    "`labels` must contain one terminal reward per sequence and have shape "
+                    f"[batch_size] (or [batch_size, 1]); got {tuple(labels.shape)}."
+                )
+            if not value_mask.any(dim=1).all():
+                raise ValueError("Every sequence must contain at least one non-padding token.")
+
+            # The dataset supplies one outcome reward per trajectory. PPO token rewards are
+            # therefore zero except at the final valid token. Gamma is fixed to 1.
+            rewards = torch.zeros_like(values)
+            last_token_indices = value_mask.long().sum(dim=1) - 1
+            rewards.scatter_(1, last_token_indices.unsqueeze(1), target_rewards.unsqueeze(1))
+
+            # GAE: delta_t = r_t + V(s_{t+1}) - V(s_t),
+            # A_t = delta_t + lambda * A_{t+1}. Detaching here makes the full
+            # target V(s_t) + A_t a stop-gradient target, as in PPO critic loss.
+            detached_values = values.detach()
+            advantages = torch.zeros_like(detached_values)
+            next_advantage = torch.zeros(batch_size, device=values.device, dtype=values.dtype)
+            for token_idx in range(seq_length - 1, -1, -1):
+                valid = value_mask[:, token_idx]
+                if token_idx + 1 < seq_length:
+                    next_valid = value_mask[:, token_idx + 1]
+                    next_value = torch.where(
+                        next_valid, detached_values[:, token_idx + 1], torch.zeros_like(next_advantage)
+                    )
+                else:
+                    next_value = torch.zeros_like(next_advantage)
+
+                delta = rewards[:, token_idx] + next_value - detached_values[:, token_idx]
+                next_advantage = torch.where(
+                    valid, delta + self.gae_lambda * next_advantage, torch.zeros_like(next_advantage)
+                )
+                advantages[:, token_idx] = next_advantage
+
+            value_targets = (detached_values + advantages).detach()
+            loss = F.mse_loss(values[value_mask], value_targets[value_mask])
         
         return {
             "loss": loss,
             "values": values,
+            "value_targets": value_targets if labels is not None else None,
+            "value_mask": value_mask if labels is not None else None,
             "hidden_states": critic_hidden_states,
         }
     
@@ -287,18 +328,11 @@ class PPOSFTDataCollator:
                 padded_attention_mask = [1] * seq_length + [0] * padding_length
             attention_mask.append(padded_attention_mask)
 
-        #Implementation 1: Create label based on rewards, which should share the same shape as input_ids
-        labels = []
-        for i in range(len(rewards)):
-            labels.append([rewards[i]] * max_length)
-
-        # Implementation 2: Only one label for the whole sequence
-        #labels = rewards
-        
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.long),
             "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
-            "labels": torch.tensor(labels, dtype=torch.bfloat16),
+            # The wrapper places each sequence-level reward on its final valid token.
+            "labels": torch.tensor(rewards, dtype=torch.float32),
         }
 
 
@@ -407,7 +441,7 @@ class PPOSFTTrainer(SFTTrainer):
             raise ValueError("When using PPOSFTTrainer, the `model` argument must be a model path string.")
         
         # Create the wrapper model
-        wrapper_model = CriticModelWrapper(action_model, critic_model)
+        wrapper_model = CriticModelWrapper(action_model, critic_model, gae_lambda=args.gae_lambda)
         
         # PEFT configuration for critic model only
         if peft_config is not None:
@@ -586,24 +620,37 @@ class PPOSFTTrainer(SFTTrainer):
         """
         Compute MSE loss for value function prediction.
         """
+        mode = "train" if self.model.training else "eval"
         outputs = model(**inputs)
         loss = outputs["loss"]
-        
-        # Track metrics
-        if loss is not None:
-            self._metrics["train"]["mse_loss"].append(loss.item())
-        
-        # Track value prediction metrics
-        predicted_values = outputs["values"]
-        target_rewards = inputs["labels"]
-        
-        # Compute mean absolute error
-        mae = torch.abs(predicted_values - target_rewards).mean()
-        self._metrics["train"]["mean_absolute_error"].append(mae.item())
-        
-        # Compute mean predicted value and target reward
-        self._metrics["train"]["mean_predicted_value"].append(predicted_values.mean().item())
-        self._metrics["train"]["mean_target_reward"].append(target_rewards.mean().item())
+
+        # Report metrics against exactly the same stop-gradient GAE targets used
+        # by the critic loss, excluding padding tokens.
+        value_mask = outputs["value_mask"]
+        predicted_values = outputs["values"][value_mask].detach().float()
+        value_targets = outputs["value_targets"][value_mask].detach().float()
+        mae = torch.abs(predicted_values - value_targets).mean()
+        batch_metrics = torch.stack(
+            (
+                loss.detach().float(),
+                mae,
+                predicted_values.mean(),
+                value_targets.mean(),
+                inputs["labels"].detach().float().mean(),
+            )
+        )
+        # All ranks participate in compute_loss. Aggregate them so checkpoint
+        # selection is based on the full distributed evaluation set.
+        batch_metrics = self.accelerator.gather(batch_metrics.unsqueeze(0)).mean(dim=0)
+        metric_names = (
+            "mse_loss",
+            "mean_absolute_error",
+            "mean_predicted_value",
+            "mean_value_target",
+            "mean_terminal_reward",
+        )
+        for name, metric in zip(metric_names, batch_metrics):
+            self._metrics[mode][name].append(metric.item())
         
         return (loss, outputs) if return_outputs else loss
 

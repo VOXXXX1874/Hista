@@ -43,5 +43,5 @@ accelerate launch \
 --main_process_port 29500 \
 src/rl/hista.py \
 --config recipes/80G/Qwen2.5-3B/hybrid/Hista_inst_csipo.yaml \
---verifier_vllm_base_url http://localhost:9000/v1 \
+--verifier_vllm_base_url http://localhost:8000/v1 \
 > ./output/Qwen2.5-3B/Hista_inst_hybrid_csipo_sampling.log 2>&1

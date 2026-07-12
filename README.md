@@ -9,6 +9,17 @@ This repository contains code for:
 - State Value Estimation Benchmark (SVEB).
 - Training and evaluation recipes for math-only and hybrid datasets.
 
+## Release status
+
+The current release includes RL training implementations and reproduction recipes for the **1.5B** and **3B** model scales on both the **math-only** and **hybrid** datasets. These are the primary supported configurations for reproducing the paper's results and overall experimental trends.
+
+Additional releases are planned:
+
+- Math-only and hybrid RL training support for the **7B** and **14B** model scales will be released incrementally.
+- We have also implemented and validated Hista and Numca on the **verl** training framework. The verl-based implementation and its reproduction configurations will be open-sourced in a future update.
+
+Unless stated otherwise, the current repository uses the TRL-based implementation documented below; the planned 7B/14B additions and verl implementation are not included yet.
+
 ## Installation
 
 ### Conda & pip
@@ -65,10 +76,10 @@ The full reproduction guide is split by workflow:
 - [State Value Estimation Benchmark](docs/sveb.md): Run SVEB generation and reuse pipelines.
 - [Training](docs/training.md): Train on math-only and hybrid datasets with the provided scripts and recipes.
 - [Evaluation](docs/evaluation.md): Deliver predefined evaluation configs and run benchmark evaluation.
-- [Appendix: verifier and sandbox setup](docs/appendix.md): Set up the vLLM verifier and code execution sandbox required by GeneralQA and programming tasks.
+- [Appendix: verifier and sandbox setup](docs/appendix.md): Set up the vLLM verifier and code execution sandbox required by hybrid dataset training and evaluation.
 
 ## Quick paths
 
-- Fastest math-only reproduction: follow [Data preparation](docs/data_preparation.md#fastest-path-math-only), then [Training](docs/training.md#training-on-math-dataset).
+- Fastest math-only reproduction: follow [Data preparation](docs/data_preparation.md#fastest-path-math-only), then [Training](docs/training.md#choose-an-entry-point-and-recipe).
 - SVEB reproduction: prepare SVEB data in [Data preparation](docs/data_preparation.md), then follow [SVEB](docs/sveb.md).
-- Hybrid training reproduction: prepare benchmarks and hybrid data in [Data preparation](docs/data_preparation.md), set up services in [Appendix](docs/appendix.md), then follow [Training](docs/training.md#training-on-hybrid-dataset).
+- Hybrid training reproduction: prepare benchmarks and hybrid data in [Data preparation](docs/data_preparation.md), set up services in [Appendix](docs/appendix.md), then follow [Hybrid training](docs/training.md#hybrid-training-and-verifier-vllm).

@@ -1,10 +1,9 @@
 from rl.utils.numca_dict import *
 # parse args
 import argparse
-import random
 from tqdm import tqdm
 from contextlib import redirect_stdout
-import json
+from sveb.common import EvaluationReporter, build_offline_pools, load_dataset
 
 def main(
     dataset_path,
@@ -12,41 +11,10 @@ def main(
     num_of_problems,
 ):
     # Load the dataset
-    with open(dataset_path, 'r') as f:
-        dataset = json.load(f)
-    # random sample with num_of_problems, which can be larger than the dataset size but repeatable
-    dataset = random.sample(dataset, k=num_of_problems)
+    dataset = load_dataset(dataset_path, num_of_problems)
+    problems_offline_responses, problems_offline_rewards = build_offline_pools(dataset)
 
-    problems_offline_responses = {}
-    problems_offline_rewards = {}
-    for data in dataset:
-        problem = data["problem"]
-        response = data["response"]
-        reward = 1.0 if data["output_reward"] > 0.5 else 0.0
-
-        if problem not in problems_offline_responses:
-            correct_responses = list(data["correct_responses"])
-            wrong_responses = list(data["wrong_responses"])
-            if reward > 0.5:
-                if response not in correct_responses:
-                    correct_responses.append(response)
-            else:
-                if response not in wrong_responses:
-                    wrong_responses.append(response)
-
-            offline_responses = correct_responses + wrong_responses
-            rewards = [1.0] * len(correct_responses) + [0.0] * len(wrong_responses)
-            problems_offline_responses[problem] = offline_responses
-            problems_offline_rewards[problem] = rewards
-            continue
-
-        if response not in problems_offline_responses[problem]:
-            problems_offline_responses[problem].append(response)
-            problems_offline_rewards[problem].append(reward)
-
-    estimation_unbiased_mae_list = []
-    grpo_unbiased_mae_list = []
-    unbiased_noise_mae_list = []
+    reporter = EvaluationReporter()
 
     # Open the output file
     with open(output_path, 'w') as f:
@@ -81,39 +49,11 @@ def main(
                     if abs(estimated_advantage[i] - estimated_advantage[i + 1]) > 1e-6:
                         estimated_state_value += estimated_advantage[i]
 
-                unbiased_state_value = data["unbiased_state_value"]
-                unbiased_noise_mae_list.append(data['unbiased_state_value_noise'])
                 grpo_state_value = sum(problems_offline_rewards[problem]) / len(problems_offline_rewards[problem])
+                reporter.add(data, estimated_state_value, grpo_state_value,
+                             noise=data["unbiased_state_value_noise"])
 
-                # print the prompt, sampled response, selected position, estimated value function, unbiased value function, mae between estimated and unbiased value function
-                print("Problem:", data["problem"])
-                print("--------------------------------------------------")
-                print("Response until Selected Position:", response[:MCTS_position])
-                print("--------------------------------------------------")
-                print("Final Reward of Sampled Response:", data["output_reward"])
-                print("--------------------------------------------------")
-                print("Estimated Value Function:", estimated_state_value)
-                print("Unbiased Value Function:", unbiased_state_value)
-                print("GRPO Value Function:", grpo_state_value)
-                print("mae between estimated and unbiased:", abs(estimated_state_value - unbiased_state_value))
-                estimation_unbiased_mae_list.append(abs(estimated_state_value - unbiased_state_value))
-                print("mae between grpo and unbiased:", abs(grpo_state_value - unbiased_state_value))
-                grpo_unbiased_mae_list.append(abs(grpo_state_value - unbiased_state_value))
-                print("==================================================")
-
-            print("Average Estimation mae between Estimated and Unbiased Value Function:", sum(estimation_unbiased_mae_list) / len(estimation_unbiased_mae_list))
-            print("Average Estimation mae between GRPO and Unbiased Value Function:", sum(grpo_unbiased_mae_list) / len(grpo_unbiased_mae_list))
-            for i in range(len(unbiased_noise_mae_list[0])):
-                sum_noise = 0
-                count = 0
-                for j in range(len(unbiased_noise_mae_list)):
-                    if i < len(unbiased_noise_mae_list[j]):
-                        sum_noise += unbiased_noise_mae_list[j][i]
-                        count += 1
-                if count > 0:
-                    print("Average Unbiased Value Function Noise mae with {} samples: {}".format((i+1), sum_noise / count))
-                else:
-                    print("Average Unbiased Value Function Noise mae with {} samples: {}".format((i+1), "Unavailable"))
+            reporter.summary()
 
 if __name__ == "__main__":
     # parse the arguments: model_name, dataset_path, output_path

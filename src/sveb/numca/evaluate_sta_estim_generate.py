@@ -1,31 +1,13 @@
-from rl.utils.rewards import eval_answer_reward
 from rl.utils.numca_dict import *
 from rl.utils.prepare_dataset import *
 from transformers import AutoTokenizer
-from vllm import LLM, SamplingParams
 # import torch
 # parse args
 import argparse
-import random
 import json
 from datasets import load_dataset
 from contextlib import redirect_stdout
-
-def _build_prompt(data, use_default_system_prompt):
-    if use_default_system_prompt:
-        return [
-            {"role": "user", "content": data["problem"]},
-        ]
-
-    if data.get("verifier", None) == "code":
-        system_prompt = SYSTEM_PROMPT_CODE
-    else:
-        system_prompt = SYSTEM_PROMPT
-    return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": data["problem"]},
-    ]
-
+from sveb.common import EvaluationReporter, generate_rollouts, make_result, noise_maes, score_responses, split_responses
 
 def main(
     model_name,
@@ -40,75 +22,15 @@ def main(
     tp=1,
     enable_thinking=False,
 ):
-    # Create a sampling params object.
-    sampling_params= SamplingParams(temperature=0.9,
-                                        max_tokens=max_length,
-                                        n = grpo_num,
-                                        seed = random.randint(0, 10000)
-                                        )
-    sampling_params_MCTS = SamplingParams(temperature=0.9,
-                                        max_tokens=max_length,
-                                        n = mcs_num,
-                                        seed = random.randint(0, 10000)
-                                        )
-    # Create LLM object
-    llm = LLM(model=model_name,  # replace your own model
-                dtype='bfloat16',
-                tensor_parallel_size=tp,  # number of gpu
-                gpu_memory_utilization=0.7,  # prevent OOM
-                trust_remote_code=True,
-                )
+    rollouts = generate_rollouts(
+        model_name, dataset_path, num_of_problems, grpo_num, mcs_num,
+        max_length, use_default_system_prompt, tp, enable_thinking,
+        temperature=0.9,
+    )
+    dataset, outputs = rollouts.dataset, rollouts.outputs
+    MCTS_outputs, MCTS_positions = rollouts.continuation_outputs, rollouts.positions
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    with open(dataset_path, 'r') as f:
-        dataset = json.load(f)
-    
-    # random sample with num_of_problems, which can be larger than the dataset size but repeatable
-    dataset = random.choices(dataset, k=num_of_problems)
-    prompts = []
-    for data in dataset:
-        prompt = _build_prompt(data, use_default_system_prompt)
-        input_prompt = tokenizer.apply_chat_template(
-            prompt,
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=enable_thinking,
-        )
-        prompts.append(input_prompt)
-
-    # Generate answers
-    outputs = llm.generate(prompts, sampling_params=sampling_params)
-
-    # MCTS prompts
-    MCTS_prompts = []
-    MCTS_positions = []
-    for data, output in zip(dataset, outputs):
-        response = output.outputs[0].text
-        # Random select a position of ' ' from the sample response
-        space_positions = [i for i, char in enumerate(
-            response) if char == ' ']
-        if not space_positions:
-            selected_position = len(response)
-        else:
-            selected_position = random.choice(space_positions)
-        MCTS_positions.append(selected_position)
-        MCTS_prompt = _build_prompt(data, use_default_system_prompt)
-        MCTS_input_prompt = tokenizer.apply_chat_template(
-            MCTS_prompt,
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=enable_thinking,
-        ) + response[:selected_position]
-        MCTS_prompts.append(MCTS_input_prompt)
-
-    # Generate MCTS answers
-    MCTS_outputs = llm.generate(MCTS_prompts, sampling_params=sampling_params_MCTS)
-
-    estimation_unbiased_mae_list = []
-    init_unbiased_mae_list = []
-    grpo_unbiased_mae_list = []
-    unbiased_noise_mae_list = [[] for _ in range(mcs_num)]
+    reporter = EvaluationReporter()
     result_list = []
     # Open the output file
     with open(output_path, 'w') as f:
@@ -116,24 +38,9 @@ def main(
         with redirect_stdout(f):
             for output, MCTS_output, MCTS_position, data in zip(outputs, MCTS_outputs, MCTS_positions, dataset):
                 completions = [o.text for o in output.outputs]
-                problem = data["problem"]
-                solutions = [data["solution"] if data.get("verifier", None) == "code" or data.get("verifier", None) == "general" else '$' + data["solution"] + '$' for _ in range(len(completions))]
-                verifiers = [data.get("verifier", None) for _ in range(len(completions))]
-                rewards = eval_answer_reward(
-                    completions = completions, 
-                    solutions = solutions, 
-                    silence=True,
-                    verifiers=verifiers, 
-                    problems=[problem]*len(completions)
-                )
+                rewards = score_responses(data, completions)
                 grpo_init_state_value = sum(rewards) / len(rewards)
-                correct_responses = []
-                wrong_responses = []
-                for completion, reward in zip(completions, rewards):
-                    if reward > 0:
-                        correct_responses.append(completion)
-                    else:
-                        wrong_responses.append(completion)
+                correct_responses, wrong_responses = split_responses(completions, rewards)
 
                 # Build the online NumCA table from the sampled completions.
                 problem_numca_dict = Numca_dict()
@@ -159,82 +66,24 @@ def main(
                         estimated_state_value += estimated_advantage[i]
 
                 MCTS_responses = [response[:MCTS_position] + o.text for o in MCTS_output.outputs]
-                mcs_solutions = [
-                    data["solution"]
-                    if data.get("verifier", None) == "code" or data.get("verifier", None) == "general"
-                    else '$' + data["solution"] + '$'
-                    for _ in range(len(MCTS_responses))
-                ]
-                mcs_verifiers = [data.get("verifier", None) for _ in range(len(MCTS_responses))]
-                mcs_rewards = eval_answer_reward(
-                    completions = MCTS_responses,
-                    solutions = mcs_solutions,
-                    silence=True,
-                    verifiers = mcs_verifiers,
-                    problems = [problem]*len(MCTS_responses)
-                )
+                mcs_rewards = score_responses(data, MCTS_responses)
                 unbiased_state_value = sum(mcs_rewards) / len(mcs_rewards)
 
 
-                # print the prompt, sampled response, selected position, estimated value function, unbiased value function, mae between estimated and unbiased value function
-                print("Problem:", data["problem"])
-                print("--------------------------------------------------")
-                print("Sampled Response:", response)
-                print("--------------------------------------------------")
-                print("Selected Position:", MCTS_position)
-                print("--------------------------------------------------")
-                print("Response until Selected Position:", response[:MCTS_position])
-                print("--------------------------------------------------")
-                print("Init state Value Function", problem_numca_dict.root_node.state_value)
-                print("Estimated Value Function:", estimated_state_value)
-                print("Unbiased Value Function:", unbiased_state_value)
-                print("mae between estimated and unbiased:", abs(estimated_state_value - unbiased_state_value))
-                estimation_unbiased_mae_list.append(abs(estimated_state_value - unbiased_state_value))
-                print("mae between init and unbiased:", abs(problem_numca_dict.root_node.state_value - unbiased_state_value))
-                init_unbiased_mae_list.append(abs(problem_numca_dict.root_node.state_value - unbiased_state_value))
-                print("mae between grpo and unbiased:", abs(grpo_init_state_value - unbiased_state_value))
-                grpo_unbiased_mae_list.append(abs(grpo_init_state_value - unbiased_state_value))
-                print("--------------------------------------------------")
-
-
-                used_samples = 1
-                while used_samples <= mcs_num:
-                    print("Used Samples:", used_samples)
-                    # Random sample used_samples responses for estimating the unbiased value function with less samples
-                    sampled_list = random.sample(list(range(len(mcs_rewards))), min(used_samples, len(mcs_rewards)))
-                    sampled_unbiased_state_value = sum(mcs_rewards[i] for i in sampled_list) / len(sampled_list)
-                    print("Unbiased Value Function with {} samples: {}".format(used_samples, sampled_unbiased_state_value))
-                    print("mae of unbiased value function with {} samples: {}".format(used_samples, abs(unbiased_state_value - sampled_unbiased_state_value)))
-                    unbiased_noise_mae_list[used_samples-1].append(abs(unbiased_state_value - sampled_unbiased_state_value))
-                    used_samples += 1
-                    print("--------------------------------------------------")
-                print("==================================================")
-
-                result = {
-                    "problem": problem,
-                    "solution": data["solution"],
-                    "verifier": data.get("verifier", None),
-                    "correct_responses": correct_responses,
-                    "wrong_responses": wrong_responses,
-                    "response": response,
-                    "sampled_response": response[:MCTS_position],
-                    "output_reward": final_reward,
-                    "unbiased_state_value": unbiased_state_value,
-                    "unbiased_state_value_noise": [
-                        unbiased_noise_mae_list[used_samples-1][-1]
-                        for used_samples in range(1, mcs_num+1)
-                    ],
-                }
+                case_noise = noise_maes(mcs_rewards, range(1, mcs_num + 1))
+                case_data = dict(data, sampled_response=response[:MCTS_position],
+                                 output_reward=final_reward,
+                                 unbiased_state_value=unbiased_state_value)
+                reporter.add(case_data, estimated_state_value, grpo_init_state_value,
+                             full_response=response, position=MCTS_position,
+                             noise=case_noise,
+                             extras={"Initial State Value Function": problem_numca_dict.root_node.state_value})
+                result = make_result(case_data, correct_responses, wrong_responses, response,
+                                     response[:MCTS_position], final_reward,
+                                     unbiased_state_value, case_noise)
                 result_list.append(result)
 
-            print("Average Estimation mae between Estimated and Unbiased Value Function:", sum(estimation_unbiased_mae_list) / len(estimation_unbiased_mae_list))
-            print("Average Estimation mae between Init and Unbiased Value Function:", sum(init_unbiased_mae_list) / len(init_unbiased_mae_list))
-            print("Average Estimation mae between GRPO and Unbiased Value Function:", sum(grpo_unbiased_mae_list) / len(grpo_unbiased_mae_list))
-            for i in range(mcs_num):
-                if len(unbiased_noise_mae_list[i]) > 0:
-                    print("Average Unbiased Value Function Noise mae with {} samples: {}".format(i+1, sum(unbiased_noise_mae_list[i]) / len(unbiased_noise_mae_list[i])))
-                else:
-                    print("Average Unbiased Value Function Noise mae with {} samples: {}".format(i+1, "Unavailable"))
+            reporter.summary()
 
     if save_path is not None:
         with open(save_path, 'w') as f:

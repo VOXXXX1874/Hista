@@ -46,6 +46,6 @@ python src/data_preparation/merge_for_training.py \
                     src/data_preparation/verifiable_python/1.5B/sampled/0717/train.json \
                     src/data_preparation/verifiable_python/1.5B/sampled/1737/train.json \
                     src/data_preparation/verifiable_python/1.5B/sampled/3777/train.json \
-    --num_samples   903 654 398 336 \
+    --num_samples   250 250 250 250 \
     --output_folder data/1.5B/sveb_program/ \
     --exclude_test

@@ -1,5 +1,5 @@
 import json
-from math_verify import parse, LatexExtractionConfig, verify
+from math_verify import parse, LatexExtractionConfig
 from sympy import nan, zoo
 import os
 import argparse
@@ -57,8 +57,8 @@ if __name__ == "__main__":
             }
             new_testing_data.append(processed_item)
 
-    # Create the preprocessed directory if it doesn't exist
-    os.makedirs('preprocessed', exist_ok=True)
+    # Create the processed directory if it doesn't exist
+    os.makedirs('processed', exist_ok=True)
 
     # Save the processed training dataset
     with open('processed/train.json', 'w') as f:

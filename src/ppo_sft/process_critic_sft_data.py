@@ -73,6 +73,20 @@ def load_relevant_rollouts(paths, sveb_data, mode):
     return merge_rollout_datasets(relevant_datasets)
 
 
+def filter_by_difficulty(rollout_data, lower, upper):
+    """Keep problems whose empirical success rate is in (lower, upper]."""
+    filtered = []
+    for qa in rollout_data:
+        num_correct = len(qa.get("correct_responses", []))
+        num_total = num_correct + len(qa.get("wrong_responses", []))
+        if num_total == 0:
+            continue
+        success_rate = num_correct / num_total
+        if lower < success_rate <= upper:
+            filtered.append(qa)
+    return filtered
+
+
 def select_qa_dataset(sveb_data, rollout_data, mode, num_samples, rng):
     """Select problem-level examples according to the PPO epoch setting.
 
@@ -159,6 +173,18 @@ def parse_args():
         help="Maximum number of response-level samples written to test.json.",
     )
     parser.add_argument(
+        "--lower",
+        type=float,
+        default=0.00,
+        help="Exclusive lower bound on correct / total rollout responses.",
+    )
+    parser.add_argument(
+        "--upper",
+        type=float,
+        default=0.77,
+        help="Inclusive upper bound on correct / total rollout responses.",
+    )
+    parser.add_argument(
         "--mode",
         choices=["ppo-1", "ppo-n"],
         required=True,
@@ -175,6 +201,8 @@ def parse_args():
         parser.error("--num_samples must be positive")
     if args.num_test_samples < 1:
         parser.error("--num_test_samples must be positive")
+    if not 0.0 <= args.lower < args.upper <= 1.0:
+        parser.error("difficulty bounds must satisfy 0 <= lower < upper <= 1")
     return args
 
 
@@ -185,6 +213,7 @@ def main():
     rollout_data = load_relevant_rollouts(
         args.rollout_data, sveb_data, args.mode
     )
+    rollout_data = filter_by_difficulty(rollout_data, args.lower, args.upper)
 
     qa_dataset = select_qa_dataset(
         sveb_data, rollout_data, args.mode, args.num_samples, rng

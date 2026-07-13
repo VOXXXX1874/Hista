@@ -17,6 +17,7 @@ if __name__ == "__main__":
         data = json.load(open(input_file, "r"))
         for item in data:
             item["id"] = id
+            item["solution"] = item["solution"].replace("$", "")
             id += 1
             merged_data.append(item)
 

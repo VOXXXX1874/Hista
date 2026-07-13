@@ -146,7 +146,9 @@ PPO evaluation first requires a trained critic and value head. To isolate state-
 
 ### 1. Prepare critic-SFT data
 
-Obtain the extra rollout files described in [Data Preparation](data_preparation.md#extra-rollouts), or generate them with the rollout pipeline, then run:
+If you only want to reproduce the result, you can use the processed data download in [Processed Data](data_preparation.md#processed-data).
+
+If you want to adjust the training data, you need to obtain the extra rollout files described in [Data Preparation](data_preparation.md#extra-rollouts), or generate them with the rollout pipeline, then run:
 
 ```bash
 bash scripts/sveb/ppo/prepare_data/ppo_sft_qwen2.5-1.5B-Instruct.sh

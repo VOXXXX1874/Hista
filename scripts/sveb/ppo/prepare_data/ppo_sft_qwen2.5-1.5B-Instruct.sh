@@ -38,7 +38,7 @@ python src/ppo_sft/process_critic_sft_data.py \
     --rollout_data \
         src/data_preparation/verifiable_python/1.5B/sampled/sample_20.json \
     --output_dir data/1.5B/ppo-n/program \
-    --num_samples 2200 \
+    --num_samples 1000 \
     --mode ppo-n
 
 # PPO-1 data preparation for Qwen2.5-1.5B-Instruct

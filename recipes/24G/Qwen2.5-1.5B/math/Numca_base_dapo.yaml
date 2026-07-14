@@ -54,7 +54,7 @@ per_device_eval_batch_size: 1000
 per_device_train_batch_size: 2
 
 # saving
-output_dir: output/Qwen2.5-1.5B/Numca-1.5B-base-dapo
+output_dir: output/Qwen2.5-1.5B/Numca-1.5B-math-base-dapo
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"

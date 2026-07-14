@@ -1,5 +1,5 @@
 # Model arguments
-model_name_or_path: Qwen/Qwen2.5-1.5B
+model_name_or_path: Qwen/Qwen2.5-3B
 model_revision: main
 dtype: bfloat16
 attn_implementation: flash_attention_2
@@ -47,15 +47,15 @@ learning_rate: 1.0e-06
 lr_scheduler_type: constant
 
 # Batch config
-gradient_accumulation_steps: 32
+gradient_accumulation_steps: 16
 num_generations: 32
 num_iterations: 4 
 num_train_epochs: 1
-per_device_eval_batch_size: 4000
+per_device_eval_batch_size: 2000
 per_device_train_batch_size: 4
 
 # saving
-output_dir: output/Qwen2.5-1.5B/GRPO-1.5B-base-dapo
+output_dir: output/Qwen2.5-3B/GRPO-3B-math-base-dapo
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"

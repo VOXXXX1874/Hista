@@ -3,7 +3,7 @@ from rl.utils.numca_dict import *
 import argparse
 from tqdm import tqdm
 from contextlib import redirect_stdout
-from sveb.common import EvaluationReporter, build_offline_pools, load_dataset
+from sveb.common import EvaluationReporter, build_offline_pools, load_dataset, make_parent_dirs
 
 def main(
     dataset_path,
@@ -11,6 +11,7 @@ def main(
     num_of_problems,
 ):
     # Load the dataset
+    make_parent_dirs(output_path)
     dataset = load_dataset(dataset_path, num_of_problems)
     problems_offline_responses, problems_offline_rewards = build_offline_pools(dataset)
 

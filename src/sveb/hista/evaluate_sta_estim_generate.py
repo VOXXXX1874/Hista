@@ -8,7 +8,7 @@ from contextlib import redirect_stdout
 from rl.utils.hista_utils import *
 from rl.utils.prepare_dataset import *
 from tqdm import tqdm
-from sveb.common import EvaluationReporter, generate_rollouts, make_result, noise_maes, score_responses, split_responses
+from sveb.common import EvaluationReporter, generate_rollouts, make_parent_dirs, make_result, noise_maes, score_responses, split_responses
 
 def main(
     model_name,
@@ -18,6 +18,7 @@ def main(
     grpo_num,
     mcs_num,
     max_length,
+    generation_temperature,
     num_of_problems,
     t,
     layer,
@@ -33,10 +34,11 @@ def main(
     tp = 1,
     enable_thinking=False,
 ):
+    make_parent_dirs(output_path, save_path)
     rollouts = generate_rollouts(
         model_name, dataset_path, num_of_problems, grpo_num, mcs_num,
         max_length, use_default_system_prompt, tp, enable_thinking,
-        temperature=0.7, replace=False, deduplicate=True,
+        temperature=generation_temperature, replace=False, deduplicate=True,
     )
     dataset, outputs, tokenizer = rollouts.dataset, rollouts.outputs, rollouts.tokenizer
     MCTS_outputs, MCTS_positions = rollouts.continuation_outputs, rollouts.positions
@@ -176,8 +178,9 @@ if __name__ == "__main__":
     parser.add_argument("--output_path", type=str, default="output/adv_estim_sampling.log")
     parser.add_argument("--save_path", type=str, default=None)
     parser.add_argument("--grpo_num", type=int, default=20)
-    parser.add_argument("--mcs_num", type=int, default=10)
+    parser.add_argument("--mcs_num", type=int, default=20)
     parser.add_argument("--max_length", type=int, default=4096)
+    parser.add_argument("--generation_temperature", type=float, default=0.7)
     parser.add_argument("--num_of_problems", type=int, default=1000)
     parser.add_argument("--t", type=float, default=1.0)
     parser.add_argument("--layer", type=int, default=1)
@@ -207,6 +210,7 @@ if __name__ == "__main__":
         grpo_num=args.grpo_num,
         mcs_num=args.mcs_num,
         max_length=args.max_length,
+        generation_temperature=args.generation_temperature,
         num_of_problems=args.num_of_problems,
         t = args.t,
         layer = - args.layer,

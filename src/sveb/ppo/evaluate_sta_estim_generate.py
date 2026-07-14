@@ -5,7 +5,7 @@ import json
 import torch
 from ppo_sft.trainer.ppo_sft_trainer import CriticModelWrapper
 from tqdm import tqdm
-from sveb.common import EvaluationReporter, generate_rollouts, make_result, noise_maes, render_prompt, score_responses, split_responses
+from sveb.common import EvaluationReporter, generate_rollouts, make_parent_dirs, make_result, noise_maes, render_prompt, score_responses, split_responses
 
 
 def _estimate_state_value(critic_wrapper, tokenizer, input_text):
@@ -26,15 +26,17 @@ def main(
     grpo_num,
     mcs_num,
     max_length,
+    generation_temperature,
     num_of_problems,
     use_default_system_prompt=False,
     tp=1,
     enable_thinking=False,
 ):
+    make_parent_dirs(output_path, save_path)
     rollouts = generate_rollouts(
         action_model_name, dataset_path, num_of_problems, grpo_num, mcs_num,
         max_length, use_default_system_prompt, tp, enable_thinking,
-        temperature=0.7,
+        temperature=generation_temperature,
     )
     dataset, outputs = rollouts.dataset, rollouts.outputs
     MCTS_outputs, MCTS_positions = rollouts.continuation_outputs, rollouts.positions
@@ -104,8 +106,9 @@ if __name__ == "__main__":
     parser.add_argument("--output_path", type=str, default="output/adv_estim_sampling.log")
     parser.add_argument("--save_path", type=str, default=None)
     parser.add_argument("--grpo_num", type=int, default=20)
-    parser.add_argument("--mcs_num", "--num", dest="mcs_num", type=int, default=10)
+    parser.add_argument("--mcs_num", type=int, default=20)
     parser.add_argument("--max_length", type=int, default=4096)
+    parser.add_argument("--generation_temperature", type=float, default=0.7)
     parser.add_argument("--num_of_problems", type=int, default=1000)
     parser.add_argument("--use_default_system_prompt", action="store_true", help="Use default system prompt if set.")
     parser.add_argument("--tp", type=int, default=1)
@@ -123,6 +126,7 @@ if __name__ == "__main__":
         grpo_num=args.grpo_num,
         mcs_num=args.mcs_num,
         max_length=args.max_length,
+        generation_temperature=args.generation_temperature,
         num_of_problems=args.num_of_problems,
         use_default_system_prompt=args.use_default_system_prompt,
         tp=args.tp,

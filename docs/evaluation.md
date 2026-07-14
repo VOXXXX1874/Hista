@@ -2,6 +2,31 @@
 
 Training-time quick evaluation is used to select the best checkpoint, while `src/evaluation/evaluation.py` performs the final benchmark evaluation reported across models and methods. The latter loads a model once with vLLM, evaluates one or more processed benchmark datasets in sequence, calculates correctness and format rewards, and writes per-completion results and a summary log for every benchmark.
 
+## Verifier and sandbox prerequisites
+
+Inspect the `verifier` values in every requested benchmark before loading the evaluation model:
+
+| Sample type | Typical `verifier` | Required setup |
+| --- | --- | --- |
+| Math/number | `default` | Local parsing and symbolic comparison; no external service |
+| Science and GeneralQA | `general` | Start and wake the [external verifier service](appendix.md#start-the-verifier-service) |
+| Programming | `code` or `code_*` | Configure and test the [programming sandbox](appendix.md#programming-sandbox-behavior) |
+
+A command may mix benchmark types. In that case, prepare every dependency required by any listed dataset before launching `evaluation.py`.
+
+Unlike hybrid policy training, final evaluation does **not** manage verifier sleep and wake. For science or GeneralQA benchmarks, wake the proxy manually and set its OpenAI-compatible endpoint:
+
+```bash
+python src/vllm_verifier/wakeup_vllm.py \
+  --proxy-url http://localhost:8000
+
+export VERIFIER_BASE_URL=http://localhost:8000/v1
+```
+
+Keep the verifier awake for the entire command because datasets are evaluated sequentially. Put it back to sleep after evaluation if the GPUs need to be reused. A verifier request failure is handled as an incorrect answer, so an unavailable service can silently depress the reported accuracy rather than stop the whole benchmark.
+
+For programming benchmarks, export `CODE_SANDBOX_RUNTIME` and any custom `CODE_SANDBOX_IMAGE`, `CODE_SANDBOX_TMP_ROOT`, `CODE_TEST_TIMEOUT`, or `LOCAL_TEST_MAX_CONCURRENCY` values before starting Python. `evaluation.py` does not start the container runtime. Run the Appendix smoke test first; a missing runtime, timeout, non-zero exit, or test mismatch receives reward zero.
+
 ## Evaluation layout
 
 The relevant files are organized as follows:
@@ -33,7 +58,7 @@ data/
 
 ## Prepare benchmark data and configs
 
-First download and process the benchmarks as described in [Data Preparation](data_preparation.md). Each dataset passed to the evaluator must be a local Hugging Face dataset with a `test` split and at least `problem` and `solution` fields. A `verifier` field selects specialized grading for GeneralQA and programming benchmarks; `process` is optional and is only preserved in the result record.
+First download and process the benchmarks as described in [Data Preparation](data_preparation.md). Each dataset passed to the evaluator must be a local Hugging Face dataset with a `test` split and at least `problem` and `solution` fields. A `verifier` field selects specialized grading for science, GeneralQA, and programming benchmarks; `process` is optional and is only preserved in the result record.
 
 Then deliver all predefined configurations:
 
@@ -153,7 +178,7 @@ The reward path depends on each sample's `verifier`:
 - `general` or related GeneralQA verifier: calls the external verifier vLLM.
 - `code` or `code_*`: extracts code and executes the appropriate tests in the configured sandbox.
 
-For GeneralQA evaluation, start the verifier proxy as described in [Verifier Setup](appendix.md#verifier-setup) and wake it before running the evaluator. Unlike policy training, `evaluation.py` does not automatically manage verifier sleep. Programming benchmarks also require the sandbox from [Sandbox Setup](appendix.md#sandbox-setup).
+Operational requirements and lifecycle handling are centralized in [Verifier and sandbox prerequisites](#verifier-and-sandbox-prerequisites).
 
 ## Metrics and result files
 
@@ -211,5 +236,5 @@ Before starting a full evaluation run, verify that:
 2. The selected config name exists in every requested benchmark.
 3. `enable_thinking` and the config family match the model's chat template.
 4. The model fits at the requested tensor-parallel size and vLLM memory utilization.
-5. External verifier instances are awake for GeneralQA, and the code sandbox works for programming tasks.
+5. Every service listed in [Verifier and sandbox prerequisites](#verifier-and-sandbox-prerequisites) is ready for the selected datasets.
 6. `output_folder` is unique for this checkpoint and configuration.

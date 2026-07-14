@@ -55,7 +55,7 @@ per_device_eval_batch_size: 375
 per_device_train_batch_size: 1
 
 # saving
-output_dir: output/Qwen2.5-3B/GRPO-3B-dapo-hybrid
+output_dir: output/Qwen2.5-3B/GRPO-3B-hybrid-instruct-dapo
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"

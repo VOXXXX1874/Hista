@@ -82,4 +82,4 @@ The full reproduction guide is split by workflow:
 
 - Fastest math-only reproduction: follow [Data preparation](docs/data_preparation.md#fastest-path-math-only), then [Training](docs/training.md#choose-an-entry-point-and-recipe).
 - SVEB reproduction: prepare SVEB data in [Data preparation](docs/data_preparation.md), then follow [SVEB](docs/sveb.md).
-- Hybrid training reproduction: prepare benchmarks and hybrid data in [Data preparation](docs/data_preparation.md), set up services in [Appendix](docs/appendix.md), then follow [Hybrid training](docs/training.md#hybrid-training-and-verifier-vllm).
+- Hybrid training reproduction: prepare benchmarks and hybrid data in [Data preparation](docs/data_preparation.md), set up services in [Appendix](docs/appendix.md), then follow [Hybrid training](docs/training.md#hybrid-training).

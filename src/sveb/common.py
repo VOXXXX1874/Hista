@@ -4,12 +4,23 @@ from __future__ import annotations
 
 import gc
 import json
+import os
 import random
 from dataclasses import dataclass
 from typing import Any, Iterable, Sequence
 
 SEPARATOR = "--------------------------------------------------"
 CASE_SEPARATOR = "=================================================="
+
+
+def make_parent_dirs(*paths: str | None) -> None:
+    """Create parent directories for output files, ignoring optional paths."""
+    for path in paths:
+        if path is None:
+            continue
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
 
 
 def build_prompt(data: dict[str, Any], use_default_system_prompt: bool) -> list[dict[str, str]]:
@@ -99,8 +110,8 @@ def generate_rollouts(
     enable_thinking: bool,
     *,
     temperature: float,
-    replace: bool = True,
-    deduplicate: bool = False,
+    replace: bool = False,
+    deduplicate: bool = True,
 ) -> GeneratedRollouts:
     """Run the common initial-state and selected-position sampling stages."""
     import torch
@@ -108,10 +119,10 @@ def generate_rollouts(
     from vllm import LLM, SamplingParams
 
     initial_params = SamplingParams(
-        temperature=temperature, max_tokens=max_length, n=grpo_num, seed=random.randint(0, 10000)
+        temperature=temperature, max_tokens=max_length, n=grpo_num, seed=42
     )
     continuation_params = SamplingParams(
-        temperature=temperature, max_tokens=max_length, n=mcs_num, seed=random.randint(0, 10000)
+        temperature=temperature, max_tokens=max_length, n=mcs_num, seed=42
     )
     llm = LLM(
         model=model_name,

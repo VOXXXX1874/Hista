@@ -5,7 +5,7 @@ import torch
 from ppo_sft.trainer.ppo_sft_trainer import CriticModelWrapper
 from rl.utils.prepare_dataset import SYSTEM_PROMPT, SYSTEM_PROMPT_CODE
 from tqdm import tqdm
-from sveb.common import EvaluationReporter, build_offline_pools, load_dataset, render_prompt
+from sveb.common import EvaluationReporter, build_offline_pools, load_dataset, make_parent_dirs, render_prompt
 
 
 def _estimate_state_value(critic_wrapper, tokenizer, input_text):
@@ -26,6 +26,7 @@ def main(
     use_default_system_prompt=False,
     enable_thinking=False,
 ):
+    make_parent_dirs(output_path)
     dataset = load_dataset(dataset_path, num_of_problems)
     problems_offline_responses, problems_offline_rewards = build_offline_pools(dataset)
 

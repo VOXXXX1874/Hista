@@ -64,7 +64,7 @@ per_device_eval_batch_size: 3000
 per_device_train_batch_size: 4
 
 # saving
-output_dir: output/Qwen2.5-1.5B/Hista-1.5B-dapo-hybrid
+output_dir: output/Qwen2.5-1.5B/Hista-1.5B-hybrid-instruct-dapo
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"

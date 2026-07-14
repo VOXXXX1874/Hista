@@ -29,7 +29,7 @@ vllm_enable_sleep_mode: true
 
 # verifier vllm config
 manage_verifier_vllm_sleep: true
-verifier_vllm_base_url: http://localhost:9000/v1
+verifier_vllm_base_url: http://localhost:8000/v1
 
 # eval config
 do_eval: true
@@ -55,7 +55,7 @@ per_device_eval_batch_size: 3000
 per_device_train_batch_size: 4
 
 # saving
-output_dir: output/Qwen2.5-1.5B/GRPO-1.5B-csipo-hybrid
+output_dir: output/Qwen2.5-1.5B/GRPO-1.5B-hybrid-instruct-csipo
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"

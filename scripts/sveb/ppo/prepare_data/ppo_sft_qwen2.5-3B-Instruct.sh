@@ -3,7 +3,6 @@ python src/ppo_sft/process_critic_sft_data.py \
     --sveb_data data/3B/sveb_number/train.json \
     --rollout_data \
         src/data_preparation/DAPO-17K/3B/sampled/sample_20.json \
-        src/data_preparation/openr1-220K/3B/sampled/sample_20.json \
     --output_dir data/3B/ppo-n/number \
     --num_samples 3000 \
     --mode ppo-n
@@ -11,7 +10,6 @@ python src/ppo_sft/process_critic_sft_data.py \
 python src/ppo_sft/process_critic_sft_data.py \
     --sveb_data data/3B/sveb_math/train.json \
     --rollout_data \
-        src/data_preparation/DAPO-17K/3B/sampled/sample_20.json \
         src/data_preparation/openr1-220K/3B/sampled/sample_20.json \
     --output_dir data/3B/ppo-n/math \
     --num_samples 3000 \
@@ -46,7 +44,6 @@ python src/ppo_sft/process_critic_sft_data.py \
     --sveb_data data/3B/sveb_number/train.json \
     --rollout_data \
         src/data_preparation/DAPO-17K/3B/sampled/sample_20.json \
-        src/data_preparation/openr1-220K/3B/sampled/sample_20.json \
     --output_dir data/3B/ppo-1/number \
     --num_samples 3000 \
     --mode ppo-1
@@ -54,7 +51,6 @@ python src/ppo_sft/process_critic_sft_data.py \
 python src/ppo_sft/process_critic_sft_data.py \
     --sveb_data data/3B/sveb_math/train.json \
     --rollout_data \
-        src/data_preparation/DAPO-17K/3B/sampled/sample_20.json \
         src/data_preparation/openr1-220K/3B/sampled/sample_20.json \
     --output_dir data/3B/ppo-1/math \
     --num_samples 3000 \

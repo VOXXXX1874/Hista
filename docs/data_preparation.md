@@ -6,7 +6,7 @@ You can download and process data selectively according to the experiment you wa
 
 - To reproduce **training base models on the math dataset**, which is the fastest path without extra setup, download the math-related datasets and benchmarks in [Original Data](#original-data), then run [Align Math Data and Other Benchmarks](#align-math-data-and-other-benchmarks).
 - To reproduce **State Value Estimation Benchmark (SVEB)**, download the SVEB-related processed dataset in [Processed Data](#processed-data), then go to [State Value Estimation Benchmark](sveb.md).
-- To reproduce **training instruct models on the hybrid dataset**, download the benchmarks in [Original Data](#original-data), process the benchmarks, download the processed hybrid training dataset in [Processed Data](#processed-data), then go to [Hybrid Training](training.md#hybrid-training-and-verifier-vllm).
+- To reproduce **training instruct models on the hybrid dataset**, download the benchmarks in [Original Data](#original-data), process the benchmarks, download the processed hybrid training dataset in [Processed Data](#processed-data), then go to [Hybrid Training](training.md#hybrid-training).
 - To test or modify the data processing procedure, download all data in [Original Data](#original-data), then run the full processing flow below.
 
 Create a `data` folder in the repository root. This folder stores final data used for training and evaluation.
@@ -182,7 +182,7 @@ Because the archive already begins with `data/`, this populates the expected tra
 After extraction:
 
 - For SVEB reproduction, continue with [State Value Estimation Benchmark](sveb.md).
-- For hybrid RL, set up the verifier and programming sandbox if required, then continue with [Hybrid Training](training.md#hybrid-training-and-verifier-vllm).
+- For hybrid RL, set up the verifier and programming sandbox if required, then continue with [Hybrid Training](training.md#hybrid-training).
 - For final benchmark evaluation, the included `.evaluation_config/evaluation_config.json` files can be used directly; rerun `scripts/evaluation/deliver_config.sh` only if you modify the predefined configs.
 
 ## Data Processing
@@ -243,7 +243,7 @@ The sampling scripts use a fixed Python seed, so reruns are reproducible for the
 
 ### Sample Extra Rollouts and Select Data by Difficulty
 
-If you want to process `OpenR1-220K`, science, and general QA datasets, you need to set up a verifier. See [Verifier Setup](appendix.md#verifier-setup).
+If you want to process `OpenR1-220K`, science, and general QA datasets, you need to set up a verifier. See [Verifier Setup](appendix.md#start-the-verifier-service).
 
 If you want to process the programming dataset, you need a sandbox environment. See [Programming Sandbox Behavior](appendix.md#programming-sandbox-behavior).
 

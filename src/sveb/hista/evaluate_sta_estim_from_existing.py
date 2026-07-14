@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 from rl.utils.hista_utils import *
 from tqdm import tqdm
 from rl.utils.prepare_dataset import SYSTEM_PROMPT, SYSTEM_PROMPT_CODE
-from sveb.common import EvaluationReporter, build_offline_pools, load_dataset, render_prompt
+from sveb.common import EvaluationReporter, build_offline_pools, load_dataset, make_parent_dirs, render_prompt
 
 def main(
         model_name, 
@@ -28,6 +28,7 @@ def main(
         enable_thinking=False,
     ):
     # Load the dataset
+    make_parent_dirs(output_path)
     dataset = load_dataset(dataset_path, num_of_problems)
     if dataset[0].get("verifier", None) == "code":
         system_prompt = SYSTEM_PROMPT_CODE

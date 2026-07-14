@@ -2,6 +2,41 @@
 
 This repository trains GRPO, Hista, and Numca policies with the entry points in `src/rl` and YAML recipes under `recipes`. The shell scripts in `scripts/train` collect representative launch commands; a recipe contains the model, data, algorithm, rollout, evaluation, checkpoint, and logging settings for one run.
 
+## Verifier and sandbox prerequisites
+
+Determine the required reward services from the training data before selecting or launching a recipe:
+
+| Training data | Reward path | Required setup |
+| --- | --- | --- |
+| Math-only | Local symbolic/default verifier | No standalone verifier service or code sandbox |
+| Hybrid math samples | Local symbolic/default verifier | No additional service for these samples |
+| Hybrid science and GeneralQA samples | External language-model verifier | Start the [verifier backends and proxy](appendix.md#start-the-verifier-service) |
+| Hybrid programming samples | Execute generated code against tests | Configure and test the [programming sandbox](appendix.md#programming-sandbox-behavior) |
+
+Consequently, math-only RL can run without either auxiliary service. Hybrid RL requires both the external verifier and the sandbox because its training and quick-evaluation splits mix all of these sample types.
+
+The external verifier vLLM is separate from the policy vLLM used to generate rollouts. A hybrid recipe must enable verifier lifecycle management and identify the proxy:
+
+```yaml
+# External reward verifier, not the policy rollout engine
+manage_verifier_vllm_sleep: true
+verifier_vllm_base_url: http://localhost:8000/v1
+verifier_vllm_sleep_level: 1
+verifier_vllm_control_timeout: 120
+```
+
+Start the verifier service first, confirm that all backends work, and leave them **sleeping** when policy training begins. With `manage_verifier_vllm_sleep: true`, only the main training process sends control requests. All processes synchronize while the trainer wakes the verifier, calculates rewards, and puts it back to sleep in a `finally` block before policy optimization resumes. A failed control request aborts training instead of silently producing incomplete rewards.
+
+`verifier_vllm_base_url` is used for both OpenAI-compatible reward requests and proxy control. URLs ending in `/v1` are normalized for control, but the port must belong to the proxy rather than an individual backend. A command-line value overrides the recipe:
+
+```bash
+--verifier_vllm_base_url http://localhost:9000/v1
+```
+
+Use a dedicated verifier proxy per concurrent training job. If two jobs manage the same proxy, one can put the verifier to sleep while the other is calculating rewards. The reference hybrid scripts use different proxy ports where concurrent services are expected.
+
+For programming rewards, export `CODE_SANDBOX_RUNTIME` and any custom image, timeout, temporary-directory, or concurrency settings before launching training. The trainer does not start or validate the container runtime for you. Follow the complete setup and smoke tests in the [Appendix](appendix.md#programming-sandbox-behavior).
+
 ## Choose an entry point and recipe
 
 The three policy-training entry points share the same data preparation, reward functions, vLLM rollout backend, and most training arguments:
@@ -24,7 +59,7 @@ accelerate launch \
   --main_process_port 29502 \
   src/rl/grpo.py \
   --config recipes/24G/Qwen2.5-1.5B/math/GRPO_base_dapo.yaml \
-  > output/Qwen2.5-1.5B/GRPO_base_dapo_sampling.log 2>&1
+  > output/Qwen2.5-1.5B/GRPO_math_base_dapo_sampling.log 2>&1
 ```
 
 - `recipes/zero3.yaml` configures Accelerate and DeepSpeed ZeRO-3.
@@ -100,7 +135,7 @@ reward_weights: [1.0]
 silence: true
 ```
 
-Math samples normally use the local symbolic/default verifier. Hybrid data may additionally contain `general` samples, which call the external language-model verifier, and `code` or `code_*` samples, which execute tests in the configured sandbox. Prepare those services as described in [Verifier and Sandbox Setup](appendix.md).
+The `verifier` value on each record selects the reward path summarized in [Verifier and sandbox prerequisites](#verifier-and-sandbox-prerequisites).
 
 ## DAPO dynamic sampling
 
@@ -180,7 +215,7 @@ max_completion_length: 4096
 - `vllm_enable_sleep_mode` lets the colocated engine release memory while the policy performs forward/backward work.
 - `temperature` affects rollout diversity, while `max_completion_length` is a major determinant of rollout time and KV-cache memory.
 
-These settings control policy generation and are separate from the external verifier vLLM described below.
+These settings control policy generation and are separate from the external reward verifier described in [Verifier and sandbox prerequisites](#verifier-and-sandbox-prerequisites).
 
 ## Evaluation and checkpoint saving
 
@@ -217,7 +252,7 @@ With `save_strategy: best`, a checkpoint is saved when `metric_for_best_model` i
 
 The entry point also saves the final model and trainer state to `output_dir` after training completes.
 
-## Hybrid training and verifier vLLM
+## Hybrid training
 
 Hybrid training requires the processed model-specific dataset, for example:
 
@@ -229,18 +264,7 @@ data/
         └── test.json
 ```
 
-Start the verifier backends and proxy using [Verifier Setup](appendix.md#verifier-setup), then ensure the verifier is sleeping before policy training begins. A hybrid recipe should contain:
-
-```yaml
-manage_verifier_vllm_sleep: true
-verifier_vllm_base_url: http://localhost:8000/v1
-verifier_vllm_sleep_level: 1
-verifier_vllm_control_timeout: 120
-```
-
-When management is enabled, only the main training process sends proxy control requests. All processes synchronize around reward calculation; the trainer wakes the verifier, computes rewards, puts it back to sleep in a `finally` block, and then continues policy optimization. This prevents the verifier and colocated policy vLLM from occupying their peak memory at the same time. A failed wake/sleep request aborts the run rather than silently continuing.
-
-`verifier_vllm_base_url` serves two purposes: the trainer derives the OpenAI-compatible reward endpoint from it, and it sends wake/sleep control requests to the same proxy. Both `http://localhost:8000` and `http://localhost:8000/v1` are normalized for reward requests, but the URL must identify the proxy port rather than an individual backend port. The shell scripts may override this value on the command line:
+Complete the centralized [verifier and sandbox prerequisites](#verifier-and-sandbox-prerequisites), then select the matching hybrid recipe. The reference scripts can override the verifier proxy without copying the YAML:
 
 ```bash
 src/rl/grpo.py \
@@ -248,9 +272,7 @@ src/rl/grpo.py \
   --verifier_vllm_base_url http://localhost:9000/v1
 ```
 
-Use a dedicated verifier proxy for a training job unless you have coordinated its lifecycle explicitly. Two jobs sharing one proxy can race: one trainer may put the verifier to sleep while the other is calculating rewards. The reference `scripts/train/80G/hybrid/train_qwen2.5-3B.sh` uses ports 8000 and 9000 for different commands, illustrating the dedicated-proxy setup.
-
-Programming samples also require the sandbox independently of verifier vLLM. Verify both services before starting a hybrid run.
+At startup, verify in the resolved training arguments that lifecycle management is enabled and the proxy URL is the intended one. The reference `scripts/train/80G/hybrid/train_qwen2.5-3B.sh` uses ports 8000 and 9000 for different commands, illustrating the dedicated-proxy setup.
 
 ## Pre-flight checklist
 
@@ -261,5 +283,5 @@ Before launching a long run, check that:
 3. `num_generations` divides the resolved generation batch and the dynamic-sampling constraints hold.
 4. The evaluation batch equality above matches the selected GPU count.
 5. Policy vLLM fits alongside the training model at the configured memory utilization.
-6. For hybrid data, the verifier proxy is reachable and sleeping, and the code sandbox works.
+6. For hybrid data, all [verifier and sandbox prerequisites](#verifier-and-sandbox-prerequisites) are satisfied.
 7. Concurrent jobs use different distributed ports, output directories, and verifier proxies.

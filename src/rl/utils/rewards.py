@@ -39,7 +39,7 @@ def _get_env_int(name, default):
         return default
 
 VERIFIER_MAX_CONCURRENCY = _get_env_int("VERIFIER_MAX_CONCURRENCY", 100)
-LOCAL_TEST_MAX_CONCURRENCY = _get_env_int("LOCAL_TEST_MAX_CONCURRENCY", 8)
+LOCAL_TEST_MAX_CONCURRENCY = _get_env_int("LOCAL_TEST_MAX_CONCURRENCY", 24)
 CODE_TEST_TIMEOUT = _get_env_int("CODE_TEST_TIMEOUT", 20)
 VERIFIER_MAX_TOKENS = _get_env_int("VERIFIER_MAX_TOKENS", 1024)
 VERIFIER_BASE_URL = os.getenv("VERIFIER_BASE_URL", "http://localhost:8000/v1")

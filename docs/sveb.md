@@ -45,6 +45,29 @@ Each record must contain at least `problem`, `solution`, and `verifier`. Create 
 mkdir -p output/sveb/Qwen2.5-1.5B-Instruct tmp
 ```
 
+Before running a `generate` workflow, prepare the reward dependency required by the selected field:
+
+| SVEB field | Required reward setup |
+| --- | --- |
+| `number` | No additional verifier service or code sandbox |
+| `math` | Set up the verifier as described in [Verifier Setup](appendix.md#start-the-verifier-service) |
+| `science` | Set up the verifier and keep it available while responses are scored |
+| `general` | Set up the verifier and keep it available while responses are scored |
+| `program` | Set up and test the [programming sandbox](appendix.md#programming-sandbox-behavior) |
+
+For `math`, `science`, and `general`, complete the verifier setup before launching the SVEB script. If the verifier uses the standalone vLLM proxy, wake it before generation and point `VERIFIER_BASE_URL` at its OpenAI-compatible endpoint:
+
+```bash
+python src/vllm_verifier/wakeup_vllm.py \
+    --proxy-url http://localhost:8000
+
+export VERIFIER_BASE_URL=http://localhost:8000/v1
+```
+
+The SVEB entry points do not manage verifier sleep and wake automatically. Put the verifier back to sleep after the run if those GPUs need to be reused. For `program`, export the selected `CODE_SANDBOX_RUNTIME` and related variables before starting Python, then verify that a test program runs successfully in the container. See [Appendix: Verifier and Sandbox Setup](appendix.md) for the complete instructions.
+
+These dependencies are needed when responses are generated and scored. A `reuse` run over an already generated SVEB JSON consumes the stored rewards and Monte Carlo targets, so it does not invoke the verifier or programming sandbox again.
+
 The reference scripts are organized by method and execution mode:
 
 ```text
@@ -76,7 +99,7 @@ python src/sveb/hista/evaluate_sta_estim_generate.py \
     --tp 1
 ```
 
-This samples up to 3,000 distinct problems, generates 32 initial responses and 20 continuations per problem, writes detailed metrics to `--output_path`, and saves reusable cases to `--save_path`. The run is GPU- and verifier-intensive: reducing `--num_of_problems`, `--grpo_num`, `--mcs_num`, or `--max_length` is useful for a smoke test, but changes the benchmark configuration and result variance.
+This samples up to 3,000 distinct problems, generates 32 initial responses and 20 continuations per problem, writes detailed metrics to `--output_path`, and saves reusable cases to `--save_path`. The run is GPU- and reward-evaluation-intensive: reducing `--num_of_problems`, `--grpo_num`, `--mcs_num`, or `--max_length` is useful for a smoke test, but changes the benchmark configuration and result variance. In particular, do not launch the `math`, `science`, or `general` commands before their verifier is ready, or the `program` command before its sandbox has passed a smoke test.
 
 The common arguments are:
 

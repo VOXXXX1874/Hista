@@ -1,5 +1,5 @@
 # Model arguments
-model_name_or_path: Qwen/Qwen2.5-3B
+model_name_or_path: Qwen/Qwen2.5-7B
 model_revision: main
 dtype: bfloat16
 attn_implementation: flash_attention_2
@@ -48,7 +48,7 @@ quick_eval_dataset_size: 4000
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: false
-learning_rate: 1.0e-06
+learning_rate: 5.0e-07
 lr_scheduler_type: constant
 
 # Batch config
@@ -60,7 +60,7 @@ per_device_eval_batch_size: 2000
 per_device_train_batch_size: 4
 
 # saving
-output_dir: output/Qwen2.5-3B/Hista-3B-math-base-dapo
+output_dir: output/Qwen2.5-7B/Hista-7B-math-base-dapo
 push_to_hub: False
 save_strategy: "best"
 metric_for_best_model: "rewards/mean"

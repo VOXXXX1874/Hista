@@ -56,12 +56,12 @@ learning_rate: 1.0e-06
 lr_scheduler_type: constant
 
 # Batch config
-gradient_accumulation_steps: 32
+gradient_accumulation_steps: 16
 num_generations: 16
 num_iterations: 4 
 num_train_epochs: 1
 per_device_eval_batch_size: 3000
-per_device_train_batch_size: 4
+per_device_train_batch_size: 8
 
 # saving
 output_dir: output/Qwen2.5-3B/Hista-3B-hybrid-instruct-csipo

@@ -36,10 +36,6 @@ vllm_gpu_memory_utilization: 0.55
 max_completion_length: 2048
 vllm_enable_sleep_mode: true
 
-# verifier vllm config
-manage_verifier_vllm_sleep: true
-verifier_vllm_base_url: http://localhost:8000/v1
-
 # eval config
 do_eval: true
 eval_strategy: "steps"
